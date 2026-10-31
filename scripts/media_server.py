@@ -23,6 +23,7 @@ from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+OPTS = {}   # per root: "only" = regex a file name must match, "flat" = no subfolders
 VIDEO = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
          ".mkv": "video/x-matroska"}
 CHUNK = 1 << 20
@@ -74,6 +75,7 @@ def load_roots(args_folders):
             key += "-"
         seen.add(key)
         out.append((key, title, path))
+        OPTS[key] = {"only": re.compile(r["only"], re.I) if r.get("only") else None, "flat": bool(r.get("flat"))}
     return out
 
 
@@ -130,8 +132,10 @@ class Handler(BaseHTTPRequestHandler):
             return self.not_found()
         if mode == "dir" and os.path.isdir(full):
             return self.folder(root, rel, full)
+        name = os.path.basename(full)
+        only = OPTS.get(root[0], {}).get("only")
         if mode in ("play", "file") and os.path.isfile(full) and os.path.splitext(full)[1].lower() in VIDEO \
-                and self.visible(os.path.basename(full)):
+                and self.visible(name) and not (only and not only.search(name)):
             return self.player(root, rel) if mode == "play" else self.send_file(full)
         return self.not_found()
 
@@ -153,9 +157,11 @@ class Handler(BaseHTTPRequestHandler):
         for e in entries:
             if not self.visible(e.name):
                 continue
+            opt = OPTS.get(root[0], {})
             if e.is_dir():
-                dirs.append(e)
-            elif os.path.splitext(e.name)[1].lower() in VIDEO:
+                if not opt.get("flat"):
+                    dirs.append(e)
+            elif os.path.splitext(e.name)[1].lower() in VIDEO and not (opt.get("only") and not opt["only"].search(e.name)):
                 files.append(e)
         dirs.sort(key=lambda e: e.name.lower(), reverse=True)        # dated names: newest first
         files.sort(key=lambda e: -e.stat().st_mtime)
