@@ -1,0 +1,9 @@
+# Python packages for the vlog-film skill (tested versions, Python 3.11, Windows 11, RTX 3090).
+# torch/torchaudio come from the PyTorch CUDA index; setup.py installs them first with
+#   --index-url https://download.pytorch.org/whl/cu128
+whisperx==3.8.6
+onnxruntime-gpu==1.31.1
+opencv-python-headless>=4.10
+pillow>=11
+pillow-heif>=0.18
+numpy>=2.0

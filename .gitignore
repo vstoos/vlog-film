@@ -1,0 +1,7 @@
+# machine- and user-specific, written by setup/setup.py or by hand
+config.json
+user.md
+.venv/
+models/
+__pycache__/
+*.pyc
