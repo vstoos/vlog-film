@@ -60,6 +60,10 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
 
 - Blur licence plates (blur_plates.py: YOLO detector, low threshold, held over 12 frames). Check
   its check frames, and blur plates on thumbnails too.
+- Blur faces of people who did not agree to be filmed (rental staff, passers-by) and of children:
+  `blur_plates.py --faces` (OpenCV YuNet). At a low score it took reflections in car paint for
+  faces and put large blurs on the car; score 0.75 and a maximum face width of 12% of the frame
+  fixed that. Check a dense contact sheet (every 0.2 s) of the moments with people.
 - Route maps start at a public point (the first petrol station), never at the user's home.
 - Do not put other people's children or faces on thumbnails without the user asking.
 

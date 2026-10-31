@@ -48,6 +48,7 @@ FFMPEG = get("ffmpeg") or shutil.which("ffmpeg") or "ffmpeg"
 FFPROBE = get("ffprobe") or shutil.which("ffprobe") or "ffprobe"
 MELT = get("melt") or shutil.which("melt") or _first_existing(_MELT_GUESS) or "melt"
 PLATE_MODEL = get("plate_model") or os.path.join(SKILL_DIR, "models", "plate", "license-plate-finetune-v1l.onnx")
+FACE_MODEL = get("face_model") or os.path.join(SKILL_DIR, "models", "face", "face_detection_yunet_2023mar.onnx")
 MUSIC_DIR = get("music_dir") or os.path.expanduser("~/Music")
 FONT_BOLD = get("font_bold") or _DEF_BOLD          # captions, card titles
 FONT_LIGHT = get("font_light") or _DEF_LIGHT       # subtitles under titles

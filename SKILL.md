@@ -71,7 +71,7 @@ and per-clip options are documented there. Talk ranges come from the transcript 
 ### 3. Build and render
 
 ```
-python $K/blur_plates.py <footage> <project>/film IMG_0089 ...   # clips that show plates
+python $K/blur_plates.py <footage> <project>/film [--faces] IMG_0089 ...   # plates; --faces: people too
 python $K/filmkit.py <project>/project.py                        # renders inserts, writes film/<name>.mlt
 python $K/render_final.py <project>/film <name> <footage>/<Name>_HLG.mp4   # long: run in background
 ```
@@ -104,12 +104,13 @@ renders. When they say to build, rebuild once, verify every changed spot as in s
 
 references/youtube.md: description with chapters (`timeline.py`), thumbnail (`make_thumb.py`),
 subtitles (`make_subs.py` on the finished film, hand-corrected, then translated cue by cue), YouTube
-auto-dubbing. The user can watch renders on a phone through `python $K/media_server.py 8765 <footage>
-<project>/film` (LAN only; it serves video files read-only).
+auto-dubbing. The user can watch renders on a phone through `python $K/media_server.py --port 8765
+<footage> <project>/film` (LAN / VPN only; read-only; also at github.com/vstoos/media-server).
 
 ## Privacy
 
-Blur licence plates in clips and thumbnails; start route maps at a public place, never at the
+Blur licence plates in clips and thumbnails, and the faces of staff, passers-by and children
+(`blur_plates.py --faces`; check the frames, reflections in car paint can fool it); start route maps at a public place, never at the
 user's home; do not put other people's faces (children above all) on thumbnails unless asked.
 
 ## Reference files

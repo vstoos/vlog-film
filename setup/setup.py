@@ -26,6 +26,9 @@ VPY = os.path.join(VENV, "Scripts" if os.name == "nt" else "bin", "python" + (".
 MODEL_URL = ("https://huggingface.co/morsetechlab/yolov11-license-plate-detection/resolve/main/"
              "license-plate-finetune-v1l.onnx")
 MODEL = os.path.join(SKILL, "models", "plate", "license-plate-finetune-v1l.onnx")
+FACE_URL = ("https://github.com/opencv/opencv_zoo/raw/main/models/face_detection_yunet/"
+            "face_detection_yunet_2023mar.onnx")
+FACE = os.path.join(SKILL, "models", "face", "face_detection_yunet_2023mar.onnx")
 TORCH_INDEX = "https://download.pytorch.org/whl/cu128"
 WIN = platform.system() == "Windows"
 INSTALL = "--install" in sys.argv
@@ -144,6 +147,11 @@ def main():
         "run: python setup/setup.py --install")
     if os.path.exists(MODEL):
         cfg["plate_model"] = MODEL
+
+    if not os.path.exists(FACE) and INSTALL:
+        os.makedirs(os.path.dirname(FACE), exist_ok=True)
+        urllib.request.urlretrieve(FACE_URL, FACE)
+    say(os.path.exists(FACE), "face detector (OpenCV YuNet, MIT)", "run: python setup/setup.py --install")
 
     # --- music and fonts -------------------------------------------------------------------------------
     music = cfg.get("music_dir") or os.path.expanduser("~/Music")

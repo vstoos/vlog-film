@@ -3,7 +3,7 @@
 An agent skill that edits raw trip and car vlog footage into a finished **HDR (HLG 10-bit) YouTube
 film**: a teaser, jump cuts on speech, dash-cam road inserts under music, photo and still inserts
 with captions, an animated route map, licence-plate blurring, levelled voice, loudness-normalised
-final render, chapters, a thumbnail, and subtitles in several languages. Then it runs review
+final render, chapters, a thumbnail, face blurring for passers-by, and subtitles in several languages. Then it runs review
 rounds: you watch, send notes with times ("12:22 the end of the phrase is cut"), and the agent
 checks the source, fixes the edit and rebuilds.
 
@@ -19,6 +19,12 @@ Yaris (iPhone 10-bit HLG clips, Sony dash-cam timelapse, photos, an OBD Torque s
 > фото з підписами, анімована карта маршруту, розмиття номерів, вирівняна гучність, розділи,
 > обкладинка і субтитри кількома мовами. Встановлення нижче: агент може зробити його сам.
 
+## Maintenance
+
+This is a personal project shared as-is. **I may not have time to review pull requests or answer
+issues.** Please fork or clone it and adapt it to your needs; ideas and wishes are welcome as issues,
+with no promise of a reply.
+
 ## What you need
 
 | | Tested with | Why |
@@ -33,7 +39,8 @@ Yaris (iPhone 10-bit HLG clips, Sony dash-cam timelapse, photos, an OBD Torque s
 
 Speech recognition models (WhisperX large-v3, ~3 GB) download on first use. The licence-plate
 detector is [morsetechlab/yolov11-license-plate-detection](https://huggingface.co/morsetechlab/yolov11-license-plate-detection)
-(AGPL-3.0), downloaded by the setup script, not included here.
+(AGPL-3.0), and faces are found with OpenCV's [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet)
+(MIT); both are downloaded by the setup script, not included here.
 
 ## Install
 
@@ -93,12 +100,13 @@ renders and checks the film, then works through your notes. See `SKILL.md` for t
 SKILL.md                 the workflow the agent follows
 scripts/filmkit.py       builds the film: talk cutting on word times, inserts, captions, music, MLT
 scripts/render_final.py  melt render, two-pass loudness to -14 LUFS, HDR and green-frame checks
-scripts/blur_plates.py   licence-plate detection and blur, 10-bit HLG
+scripts/blur_plates.py   licence-plate (and optional face) detection and blur, 10-bit HLG
 scripts/transcribe_*.py  WhisperX word-timed transcripts (whole clips, short windows)
 scripts/make_subs.py     subtitles from the finished film
 scripts/make_thumb.py    thumbnail with headline
 scripts/timeline.py      film time <-> source clip time, chapters
-scripts/scan_meta.py, contact_sheet.py, roll_lr.py, media_server.py, vfconfig.py
+scripts/media_server.py  read-only phone viewer for renders (also: github.com/vstoos/media-server)
+scripts/scan_meta.py, contact_sheet.py, roll_lr.py, vfconfig.py
 references/              project template, the Yaris example, lessons learned, YouTube notes, route map
 setup/                   setup.py, install_skill.py, requirements.txt
 ```

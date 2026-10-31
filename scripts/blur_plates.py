@@ -1,6 +1,7 @@
-"""Blur licence plates in iPhone clips: YOLO detection per frame -> soft mask -> 10-bit HLG blur.
+"""Blur licence plates (and faces) in iPhone clips: detection per frame -> soft mask -> 10-bit HLG blur.
 
-usage: python blur_plates.py <footage_dir> <film_dir> <clip> [<clip> ...]   e.g. ... IMG_0089 IMG_0116
+usage: python blur_plates.py <footage_dir> <film_dir> [--faces] <clip> [<clip> ...]   e.g. ... IMG_0089
+  --faces   also blur every face found (OpenCV YuNet): strangers, staff, children
 Writes <film_dir>/<clip>_blur.mov (same length, audio copied, rotation baked in) plus
 film/<clip>_mask.mkv and a few check frames in film/plates_check/.
 filmkit.py picks up <film_dir>/<clip>_blur.mov automatically when it exists.
@@ -17,12 +18,17 @@ vf.torch_dlls()   # torch's bundled cuDNN DLLs, which the onnxruntime CUDA provi
 
 import onnxruntime as ort
 
-SRC, OUT = (sys.argv[1].replace("\\", "/"), sys.argv[2].replace("\\", "/")) if len(sys.argv) > 3 else (None, None)
+FACES = "--faces" in sys.argv
+_ARGS = [a for a in sys.argv[1:] if a != "--faces"]
+SRC, OUT = (_ARGS[0].replace("\\", "/"), _ARGS[1].replace("\\", "/")) if len(_ARGS) > 2 else (None, None)
 MODEL = vf.PLATE_MODEL   # YOLO licence-plate detector, downloaded by setup/setup.py
 CONF = 0.15            # low on purpose: a missed plate is worse than a blurred bumper
 HOLD = 12              # frames a detection is kept before and after, covers misses and motion
 PAD_W, PAD_H = 0.20, 0.35
 PLATE_ASPECT = 1.6     # min width/height of a plate box
+FACE_CONF = 0.75       # YuNet score; lower ones fire on reflections in car paint
+FACE_MAX = 0.12        # max face width as a share of frame width: bigger "faces" are car panels
+FACE_PAD = 0.45        # faces get a bigger margin: hair, a turned head
 
 
 def session():
@@ -69,6 +75,9 @@ def process(clip):
     dec = subprocess.Popen(["ffmpeg", "-v", "error", "-i", src, "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
                            stdout=subprocess.PIPE)
     sess, sess_turned = session(), session()    # one per input shape: no re-tuning per frame
+    faces = None
+    if FACES:
+        faces = cv2.FaceDetectorYN.create(vf.FACE_MODEL, "", (w, h), FACE_CONF, 0.3, 5000)
     dets = []
     while True:
         buf = dec.stdout.read(w * h * 3)
@@ -84,6 +93,12 @@ def process(clip):
                 if bw >= PLATE_ASPECT * bh and c >= 0.35:
                     # point (u, v) in the turned image is (w-1-v, u) in the frame
                     found.append((w - (y + bh), x, bh, bw, c))
+        if faces is not None:
+            _, fs = faces.detect(frame)
+            for f in (fs if fs is not None else []):
+                if f[2] > FACE_MAX * w:
+                    continue
+                found.append((float(f[0]), float(f[1]), float(f[2]), float(f[3]), float(f[14]), "face"))
         dets.append(found)
         if len(dets) % 100 == 0:
             print("  %s: %d frames" % (clip, len(dets)), flush=True)
@@ -91,7 +106,9 @@ def process(clip):
     dec.wait()
     n = len(dets)
     hits = sum(1 for d in dets if d)
-    print("%s: %d frames %dx%d, plates found on %d" % (clip, n, size[0], size[1], hits), flush=True)
+    faces_n = sum(1 for d in dets if any(len(b) > 5 for b in d))
+    print("%s: %d frames %dx%d, plates or faces found on %d%s" % (clip, n, size[0], size[1], hits,
+          (" (faces on %d)" % faces_n) if FACES else ""), flush=True)
 
     mask_path = "%s/%s_mask.mkv" % (OUT, clip)
     enc = subprocess.Popen(["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "gray",
@@ -100,9 +117,11 @@ def process(clip):
     for i in range(n):
         m = np.zeros((size[1], size[0]), np.uint8)
         for j in range(max(0, i - HOLD), min(n, i + HOLD + 1)):
-            for x, y, bw, bh, _ in dets[j]:
-                x0, y0 = int(x - bw * PAD_W), int(y - bh * PAD_H)
-                x1, y1 = int(x + bw * (1 + PAD_W)), int(y + bh * (1 + PAD_H))
+            for box in dets[j]:
+                x, y, bw, bh = box[:4]
+                pw, ph = (FACE_PAD, FACE_PAD) if len(box) > 5 else (PAD_W, PAD_H)
+                x0, y0 = int(x - bw * pw), int(y - bh * ph)
+                x1, y1 = int(x + bw * (1 + pw)), int(y + bh * (1 + ph))
                 cv2.rectangle(m, (x0, y0), (x1, y1), 255, -1)
         enc.stdin.write(m.tobytes())
     enc.stdin.close()
@@ -128,5 +147,5 @@ def process(clip):
 
 
 if __name__ == "__main__":
-    for c in sys.argv[3:]:
+    for c in _ARGS[2:]:
         process(c)
