@@ -1,0 +1,303 @@
+"""Dub a finished film into another language (Polish or English) in the user's cloned voice.
+
+  python dub.py gen <subs.srt> <ref.wav> <out_dir> [from_s] [to_s] --lang pl --cfg 0.3 --exag 0.8
+  <whisperx python> dub_check.py <out_dir> <lang>      checks every take, writes out_dir/checks.json
+  python dub_regen.py <out_dir> <ref.wav> --lang pl    new takes for changed or glitched sentences
+  python dub.py mix <film.mp4> <out_dir> [from_s] [to_s]
+
+gen: subtitle cues are joined into whole sentences (Chatterbox swallows words in fragments),
+     numbers are written out, and every sentence is spoken N times by Chatterbox Multilingual (MIT)
+     in the voice of ref.wav. out_dir/say.json {lang: {"written": "spoken"}} holds the project's
+     names and abbreviations, applied after ranges became words ("4,6 do 4,8").
+mix: the best take of each sentence (fewest flags, then highest word match) goes at the sentence's
+     first cue, cut after its last word, pauses muted. A line that does not fit is sped up (at most
+     1.3x, pitch kept) and the following lines move later, so lines never overlap. Demucs removes the
+     original voice; the new one goes over the rest, level matched to the original line.
+     Writes dub.wav, voice.wav and preview.mp4 (the film's picture with the new sound).
+references/dubbing.md has the whole method.
+"""
+import argparse
+import json
+import os
+import re
+import subprocess
+import sys
+
+import numpy as np
+import soundfile as sf
+
+import vfconfig as cfg
+
+SR = 48000
+
+
+def srt(path):
+    cues = []
+    for b in open(path, encoding="utf-8").read().strip().split("\n\n"):
+        lines = b.strip().split("\n")
+        g = [int(v) for v in re.match(r"(\d+):(\d+):(\d+),(\d+) --> (\d+):(\d+):(\d+),(\d+)", lines[1]).groups()]
+        cues.append((g[0] * 3600 + g[1] * 60 + g[2] + g[3] / 1000, g[4] * 3600 + g[5] * 60 + g[6] + g[7] / 1000,
+                     " ".join(lines[2:]).strip()))
+    return cues
+
+
+def sentences(cues, gap=0.8, longest=9.0):
+    """Join cues into sentences: (start, end_of_last_cue, text).
+
+    A long run-on sentence is also broken at a comma once it covers `longest` seconds, so that each
+    piece starts at its own cue: Polish is spoken faster, and one 40 s line ended 15 s early."""
+    out, cur = [], None
+    for s, e, t in cues:
+        if cur and s - cur[1] < gap and not re.search(r"[.!?…]$", cur[2]) \
+                and not (cur[1] - cur[0] >= longest and cur[2].endswith(",")):
+            cur = (cur[0], e, cur[2] + " " + t)
+        else:
+            if cur:
+                out.append(cur)
+            cur = (s, e, t)
+    if cur:
+        out.append(cur)
+    return out
+
+
+SAY = {}    # written -> spoken for the project's names and abbreviations (out_dir/say.json); the model mangles them
+
+
+def load_say(out, lang):
+    f = os.path.join(out, "say.json")
+    SAY.clear()
+    if os.path.exists(f):
+        SAY.update(json.load(open(f, encoding="utf-8")).get(lang, {}))
+
+
+def replace_say(t):
+    for a, b in SAY.items():
+        t = t.replace(a, b)
+    return t
+
+
+def speakable_en(text):
+    """English text for TTS: numbers, ranges, units and symbols written out."""
+    from num2words import num2words
+
+    def num(m):
+        v = m.group(0).replace(",", "")
+        try:
+            return num2words(float(v) if "." in v else int(v), lang="en")
+        except Exception:
+            return m.group(0)
+    t = re.sub(r"(\d)[-–](\d)", r"\1 to \2", text).replace("km/h", "kilometres per hour").replace("%", " percent")
+    t = replace_say(t)
+    t = re.sub(r"\bl/100 km\b", "litres per hundred kilometres", t)
+    t = re.sub(r"\bkm\b", "kilometres", t)
+    t = re.sub(r"\b(\d{1,2}):(\d{2})\b", r"\1 \2", t)
+    t = re.sub(r"(\d)-(litre|something|plus|ish)", r"\1 \2", t)
+    t = re.sub(r"\b20([12]\d)\b(?! kilomet)", lambda y: "twenty " + num2words(int(y.group(1)), lang="en"), t)   # years
+    t = re.sub(r"\d{1,3}(?:,\d{3})+|\d+\.\d+|\d+", num, t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def speakable(text, lang="pl"):
+    """Polish text for TTS: numbers, ranges, units and symbols written out."""
+    if lang == "en":
+        return speakable_en(text)
+    from num2words import num2words
+
+    def num(m):
+        v = m.group(0).replace(" ", "")
+        try:
+            return num2words(float(v.replace(",", ".")) if "," in v else int(v), lang="pl")
+        except Exception:
+            return m.group(0)
+    t = text.replace("–", " do ").replace("km/h", "kilometrów na godzinę").replace("%", " procent")
+    t = replace_say(t)
+    t = re.sub(r"\bkm\b", "kilometrów", t)
+    t = re.sub(r"\bl/100 km\b", "litrów na sto kilometrów", t)
+    t = re.sub(r"\d{1,3}(?: \d{3})+|\d+,\d+|\d+", num, t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def gen(a):
+    import torch
+    import torchaudio as ta
+    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+    model = ChatterboxMultilingualTTS.from_pretrained(device="cuda:%d" % cfg.cuda_index())
+    load_say(a.out, a.lang)
+    sents = [s for s in sentences(srt(a.subs)) if a.start <= s[0] < a.end]
+    os.makedirs(os.path.join(a.out, "takes"), exist_ok=True)
+    manifest = []
+    for i, (s, e, text) in enumerate(sents):
+        say = speakable(text, a.lang)
+        files = []
+        for k in range(a.takes):
+            torch.manual_seed(1000 * i + k)
+            wav = model.generate(say, language_id=a.lang, audio_prompt_path=a.ref, cfg_weight=a.cfg, exaggeration=a.exag)
+            f = os.path.join(a.out, "takes", "%03d_%d.wav" % (i, k))
+            ta.save(f, wav.cpu(), model.sr)
+            files.append(f)
+        manifest.append({"start": s, "end": e, "text": text, "say": say, "takes": files})
+        print("%3d/%d %6.1f s  %s" % (i + 1, len(sents), s, say[:70]), flush=True)
+    json.dump(manifest, open(os.path.join(a.out, "manifest.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+
+
+def clean(x, sr=SR, floor=-17.0, hf_floor=-14.0, depth=-45.0):
+    """Mute what the model makes in pauses (low buzz, clicks, a squeak after the last word).
+
+    A 10 ms frame is speech when it is loud (within `floor` dB of the take's loud frames) or, for
+    quiet consonants like f and s, when its high-frequency part is (`hf_floor`). Pauses under 150 ms
+    stay, speech gets 60 ms before and 150 ms after, and the rest drops by `depth` dB with short ramps."""
+    hop = sr // 100
+    n = len(x) // hop
+    if n < 10:
+        return x
+    def level(s):
+        return 10 * np.log10((s[:n * hop].reshape(-1, hop) ** 2).mean(1) + 1e-12)
+    lo, hi = level(x), level(np.diff(x, prepend=x[0]))
+    on = (lo > np.percentile(lo, 95) + floor) | (hi > np.percentile(hi, 95) + hf_floor)
+    idx = np.nonzero(on)[0]
+    for a, b in zip(idx[:-1], idx[1:]):      # close short gaps
+        if 1 < b - a <= 15:
+            on[a:b] = True
+    # islands under 60 ms with nothing around them are clicks, not speech
+    edge = np.diff(np.concatenate([[0], on.astype(int), [0]]))
+    for a, b in zip(np.nonzero(edge == 1)[0], np.nonzero(edge == -1)[0]):
+        if b - a < 6:
+            on[a:b] = False
+    # a short sound after a clear silence at the very end is the model running on, not a word
+    edge = np.diff(np.concatenate([[0], on.astype(int), [0]]))
+    starts, ends = np.nonzero(edge == 1)[0], np.nonzero(edge == -1)[0]
+    if len(starts) > 1 and on.sum() > 150 and ends[-1] - starts[-1] < 35 and starts[-1] - ends[-2] >= 18:
+        on[starts[-1]:ends[-1]] = False
+    keep = np.convolve(on.astype(float), np.ones(15), "full")[:n] > 0   # 150 ms after ...
+    keep = keep | np.concatenate([on[6:], np.zeros(6, bool)])               # ... and 60 ms before
+    gain = np.repeat(np.where(keep, 1.0, 10 ** (depth / 20)), hop)
+    ramp = np.ones(sr // 125) / (sr // 125)
+    gain = np.convolve(gain, ramp, "same")
+    gain = np.concatenate([gain, np.full(len(x) - len(gain), gain[-1])])
+    return (x * gain).astype(np.float32)
+
+
+# the model copies mains hum from the reference recording into every line; a man's voice has nothing under 70 Hz
+HUM_FILTER = "highpass=f=70:poles=2,highpass=f=70:poles=2,bandreject=f=50:width_type=h:w=6,bandreject=f=100:width_type=h:w=3"
+VOICE_LIFT = 2.0   # dB over the original voice's level: synthetic speech is harder to follow over road noise
+CHECKS = {}   # take file -> dub_check.py result: end of its last word (the model may run on after it), score, flags
+
+
+def load(f):
+    x, sr = sf.read(f, dtype="float32")
+    if CHECKS.get(f, {}).get("end"):
+        x = x[:int((CHECKS[f]["end"] + 0.15) * sr)]
+    if x.ndim > 1:
+        x = x.mean(1)
+    # float64 positions: on Windows numpy's default int is 32-bit and arange * sr overflows (audio loops)
+    x = np.interp(np.arange(int(len(x) * SR / sr), dtype=np.float64) * (sr / SR), np.arange(len(x)), x).astype(np.float32)
+    x = clean(x)
+    fr = np.abs(x[:len(x) // 960 * 960]).reshape(-1, 960).max(1)   # trim silence: 20 ms frames
+    on = np.nonzero(fr > fr.max() * 10 ** (-45 / 20))[0]
+    return x[max(0, on[0] - 2) * 960:(on[-1] + 3) * 960] if len(on) else x
+
+
+def ffmpeg(*args):
+    subprocess.run([cfg.FFMPEG, "-v", "error", "-y", *args], check=True)
+
+
+def loud(x, sr):
+    """RMS (dB) of the louder half of 50 ms frames, so pauses do not count."""
+    h = sr // 20
+    n = len(x) // h
+    if n < 2:
+        return -90.0
+    e = (x[:n * h].reshape(-1, h) ** 2).mean(1)
+    return 10 * np.log10(np.sort(e)[n // 2:].mean() + 1e-12)
+
+
+def level_gain(line, orig, sr, osr, most=8.0):
+    """Gain that puts a dubbed line at the level the same words have in the original voice, so a line
+    shouted over motorway noise stays loud. At most +-`most` dB; no change where the original has no voice."""
+    o = loud(orig, osr)
+    if o < -45:
+        return 1.0
+    g = 10 ** (np.clip(o - loud(line, sr) + VOICE_LIFT, -most, most) / 20)
+    return min(g, 0.98 / max(np.abs(line).max(), 1e-6))
+
+
+def take_rank(f, m):
+    """Sort key for a sentence's takes: fewest flags, best word match, then the shortest: the longer
+    one is more often padded with run-on, and picking the length nearest the cue chose exactly those."""
+    c = CHECKS.get(f, {})
+    return (-len(c.get("flags", [])), c.get("score", 0), -len(load(f)))
+
+
+def mix(a):
+    man = json.load(open(os.path.join(a.out, "manifest.json"), encoding="utf-8"))
+    CHECKS.update(json.load(open(os.path.join(a.out, "checks.json"), encoding="utf-8")))
+    dur = min(a.end, float(subprocess.run([cfg.FFPROBE, "-v", "error", "-show_entries", "format=duration", "-of",
+                                           "csv=p=0", a.film], capture_output=True, text=True).stdout)) - a.start
+    voice = np.zeros(int(dur * SR) + SR * 30, np.float32)
+    tmp = os.path.join(a.out, "_tmp")
+    ffmpeg("-ss", str(a.start), "-t", str(dur), "-i", a.film, "-vn", "-ac", "2", "-ar", "44100", tmp + "_film.wav")
+    subprocess.run([sys.executable, "-m", "demucs", "--two-stems", "vocals", "-n", "htdemucs", "-o", a.out,
+                    tmp + "_film.wav"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    stems = os.path.join(a.out, "htdemucs", os.path.basename(tmp) + "_film")
+    orig, osr = sf.read(os.path.join(stems, "vocals.wav"), dtype="float32")
+    orig = orig.mean(1)
+    free = a.start
+    timing = []   # (cue start, start lateness, end past the last cue's end)
+    glitches = []
+    for i, m in enumerate(man):
+        best = max(m["takes"], key=lambda f: take_rank(f, m))
+        x = load(best)
+        at = max(m["start"], free + 0.15)
+        nxt = man[i + 1]["start"] if i + 1 < len(man) else at + len(x) / SR + 1
+        room = max(m["end"] - at, nxt - at - 0.1, 0.5)
+        if len(x) / SR > room:
+            sf.write(tmp + "_in.wav", x, SR)
+            ffmpeg("-i", tmp + "_in.wav", "-af", "atempo=%.3f" % min(1.3, len(x) / SR / room), tmp + "_out.wav")
+            x, _ = sf.read(tmp + "_out.wav", dtype="float32")
+        elif a.slow < 1 and len(x) / SR < m["end"] - at:   # a line shorter than the original: speak it a bit slower
+            sf.write(tmp + "_in.wav", x, SR)
+            ffmpeg("-i", tmp + "_in.wav", "-af", "atempo=%.3f" % max(a.slow, len(x) / SR / (m["end"] - at)), tmp + "_out.wav")
+            x, _ = sf.read(tmp + "_out.wav", dtype="float32")
+        x = x * level_gain(x, orig[int((m["start"] - a.start) * osr):int((m["end"] - a.start) * osr)], SR, osr)
+        free = at + len(x) / SR
+        timing.append((m["start"], at - m["start"], free - m["end"], m["text"]))
+        j = int((at - a.start) * SR)
+        voice[j:j + len(x)] += x[:len(voice) - j]
+        print("%3d %6.1f s late %4.1f  score %.2f  %s" % (i + 1, m["start"], at - m["start"], CHECKS.get(best, {}).get("score", 0),
+                                                          m["text"][:60]), flush=True)
+        glitches += [(m["start"], fl, m["text"]) for fl in CHECKS.get(best, {}).get("flags", [])]
+    late = [t for t in timing if t[1] > 0.5 or t[2] > 1.5]
+    print("timing vs subtitles: %d lines, start late max %.1f s, end past cue max %.1f s, %d off by more than 0.5 / 1.5 s"
+          % (len(timing), max(t[1] for t in timing), max(t[2] for t in timing), len(late)))
+    for s, l, o, text in late:
+        print("   %2d:%04.1f  late %.1f  over %.1f  %s" % (s // 60, s % 60, l, o, text[:60]))
+    print("%d flags left on the chosen takes: listen to these" % len(glitches))
+    for s, fl, text in glitches:
+        print("   %2d:%04.1f  %s  %s" % (s // 60, s % 60, fl, text[:60]))
+    sf.write(os.path.join(a.out, "voice.wav"), voice[:int(dur * SR)], SR)
+    rest = os.path.join(stems, "no_vocals.wav")
+    ffmpeg("-i", rest, "-i", os.path.join(a.out, "voice.wav"), "-filter_complex",
+           "[0:a]aresample=48000[b];[1:a]aresample=48000," + HUM_FILTER + ",pan=stereo|c0=c0|c1=c0,asplit[v][key];"
+           "[b][key]sidechaincompress=threshold=0.02:ratio=4:attack=20:release=400[d];"   # road and music dip under the voice
+           "[d][v]amix=inputs=2:normalize=0,loudnorm=I=-14:TP=-1:LRA=11", "-ar", "48000",
+           os.path.join(a.out, "dub.wav"))
+    ffmpeg("-ss", str(a.start), "-t", str(dur), "-i", a.film, "-i", os.path.join(a.out, "dub.wav"),
+           "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-tag:v", "hvc1", "-c:a", "aac", "-b:a", "256k",
+           "-movflags", "+faststart", os.path.join(a.out, "preview.mp4"))
+    print("done:", os.path.join(a.out, "preview.mp4"))
+
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser()
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    g = sub.add_parser("gen")
+    g.add_argument("subs"); g.add_argument("ref"); g.add_argument("out")
+    g.add_argument("start", nargs="?", type=float, default=0.0); g.add_argument("end", nargs="?", type=float, default=1e9)
+    g.add_argument("--takes", type=int, default=3); g.add_argument("--cfg", type=float, default=0.5)
+    g.add_argument("--exag", type=float, default=0.5); g.add_argument("--lang", default="pl")
+    m = sub.add_parser("mix")
+    m.add_argument("film"); m.add_argument("out")
+    m.add_argument("start", nargs="?", type=float, default=0.0); m.add_argument("end", nargs="?", type=float, default=1e9)
+    m.add_argument("--slow", type=float, default=1.0, help="slowest tempo for lines shorter than the original, e.g. 0.92")
+    a = ap.parse_args()
+    gen(a) if a.cmd == "gen" else mix(a)

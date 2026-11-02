@@ -7,3 +7,5 @@ opencv-python-headless>=4.10
 pillow>=11
 pillow-heif>=0.18
 numpy>=2.0
+soundfile>=0.13      # dub_check.py
+num2words>=0.5.14   # dub_check.py

@@ -1,6 +1,6 @@
 ---
 name: vlog-film
-description: Edit raw trip / car vlog footage (phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail and subtitles in several languages. Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail and subtitles, even when the user does not say "skill" or "montage".
+description: Edit raw trip / car vlog footage (phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail, subtitles in several languages and dubbed audio tracks in the user's cloned voice. Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail, subtitles and dubbing ("озвуч англійською моїм голосом", "dub this into Polish", "there is a pop at 4:25 in the dub"), even when the user does not say "skill" or "montage".
 ---
 
 # Vlog film
@@ -107,6 +107,13 @@ subtitles (`make_subs.py` on the finished film, hand-corrected, then translated 
 auto-dubbing. The user can watch renders on a phone through `python $K/media_server.py --port 8765
 <footage> <project>/film` (LAN / VPN only; read-only; also at github.com/vstoos/media-server).
 
+### 7. Dubbed audio tracks
+
+For a language the user wants heard, not read: `references/dubbing.md`. The subtitles go through
+`dub.py gen`, `dub_check.py` catches the model's glitches take by take, `dub_regen.py` replaces what
+failed, and `dub.py mix` builds the track and prints what to listen to. Fix pronunciation in `say.json`.
+Do not call a dub clean from the checks alone: the user's ear is the last step.
+
 ## Privacy
 
 Blur licence plates in clips and thumbnails, and the faces of staff, passers-by and children
@@ -119,5 +126,6 @@ user's home; do not put other people's faces (children above all) on thumbnails 
 - `references/example_yaris.py`: the finished Yaris film, all features in use.
 - `references/lessons.md`: HDR, audio, cutting and framing traps, with the fixes that worked.
 - `references/youtube.md`: description, chapters, thumbnail, subtitles, dubbing, end screen.
+- `references/dubbing.md`: own audio tracks in the user's cloned voice, and automatic glitch checks.
 - `references/example_make_route.py`: animated route map (Sentinel-2 tiles + OSRM roads) from the
   Yaris film; adapt its constants (bounds, cities, pins, legs) for a new trip.

@@ -3,7 +3,8 @@
 An agent skill that edits raw trip and car vlog footage into a finished **HDR (HLG 10-bit) YouTube
 film**: a teaser, jump cuts on speech, dash-cam road inserts under music, photo and still inserts
 with captions, an animated route map, licence-plate blurring, levelled voice, loudness-normalised
-final render, chapters, a thumbnail, face blurring for passers-by, and subtitles in several languages. Then it runs review
+final render, chapters, a thumbnail, face blurring for passers-by, subtitles in several languages, and dubbed
+audio tracks in your own cloned voice with automatic glitch checks. Then it runs review
 rounds: you watch, send notes with times ("12:22 the end of the phrase is cut"), and the agent
 checks the source, fixes the edit and rebuilds.
 

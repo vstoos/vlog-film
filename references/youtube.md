@@ -45,4 +45,4 @@ bottom free for the end-screen tiles the user adds in YouTube Studio.
 
 YouTube dubs Ukrainian videos automatically only into English (as of 2026); dubs cannot be edited,
 only previewed, unpublished or deleted. Set the video language to Ukrainian, turn on manual
-publishing of dubs, listen before publishing. Polish needs subtitles or an own uploaded audio track.
+publishing of dubs, listen before publishing. Polish needs subtitles or an own uploaded audio track (references/dubbing.md).
