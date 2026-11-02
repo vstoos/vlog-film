@@ -70,6 +70,10 @@ Traps from the way there:
   would thin the voice. On the Yaris film the 49.8 Hz tone went from 15 dB over its neighbours to under 1 dB.
 - Polish years after a preposition need the ordinal in say.json: "z 2013 roku" is "z dwa tysiące
   trzynastego roku"; num2words gives the cardinal, which sounds wrong to a native ear.
+- Recognition does not catch mispronounced names: it wrote "Port" and "Katowice" where the user heard
+  "Porter" and "Katowece". Those come from the user's ear. A say.json entry applies in its order, so a
+  line-specific key ("Katowice has another") goes before the general one. Spell abbreviations as letters
+  ("G P S"). For an extra syllable, generate 6 takes and keep the one whose aligned word is shortest.
 - Read the manifest before generating: every line that starts in lower case or ends without a full stop.
   sentences() now carries a cue with no end punctuation over any pause, but a stop put in the wrong place
   ("1-2 kilometry." / "Na godzine."), a one-word orphan and a comma break before "ze" still split a
