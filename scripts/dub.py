@@ -45,10 +45,12 @@ def sentences(cues, gap=0.8, longest=9.0):
     """Join cues into sentences: (start, end_of_last_cue, text).
 
     A long run-on sentence is also broken at a comma once it covers `longest` seconds, so that each
-    piece starts at its own cue: Polish is spoken faster, and one 40 s line ended 15 s early."""
+    piece starts at its own cue: Polish is spoken faster, and one 40 s line ended 15 s early.
+    A cue with no punctuation at its end always goes on, however long the pause in the original:
+    split there, the dub stops mid-phrase."""
     out, cur = [], None
     for s, e, t in cues:
-        if cur and s - cur[1] < gap and not re.search(r"[.!?…]$", cur[2]) \
+        if cur and (s - cur[1] < gap or not re.search(r"[.,:;!?…]$", cur[2])) and not re.search(r"[.!?…]$", cur[2]) \
                 and not (cur[1] - cur[0] >= longest and cur[2].endswith(",")):
             cur = (cur[0], e, cur[2] + " " + t)
         else:

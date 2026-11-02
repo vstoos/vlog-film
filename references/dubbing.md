@@ -68,8 +68,11 @@ Traps from the way there:
 - Among equal takes prefer the shortest. Preferring the length nearest the cue picked the junk-padded ones.
 - HUM_FILTER assumes a mains frequency of 50 Hz and a man's voice; change it for 60 Hz or a higher cut
   would thin the voice. On the Yaris film the 49.8 Hz tone went from 15 dB over its neighbours to under 1 dB.
-- A cue with no end punctuation after a long pause in the original splits the sentence ("do takiego ...
-  autka"), and the dub stops mid-thought. Join the two entries in manifest.json and regenerate.
+- Read the manifest before generating: every line that starts in lower case or ends without a full stop.
+  sentences() now carries a cue with no end punctuation over any pause, but a stop put in the wrong place
+  ("1-2 kilometry." / "Na godzine."), a one-word orphan and a comma break before "ze" still split a
+  phrase, and the dub then pauses in the middle of it. Fix the text in manifest.json; dub_regen.py picks
+  up the change. Splitting differently is fine too, when the joined line would run far past its cue.
 - clean() has two thresholds that took tuning: too weak leaves buzz at -20 dB, too strong clips words.
 - Level each line to the same words in the original (Demucs vocals) plus about 2 dB, not to one
   target: a voice raised over the motorway has to stay raised.
