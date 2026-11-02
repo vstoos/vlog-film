@@ -68,6 +68,8 @@ Traps from the way there:
 - Among equal takes prefer the shortest. Preferring the length nearest the cue picked the junk-padded ones.
 - HUM_FILTER assumes a mains frequency of 50 Hz and a man's voice; change it for 60 Hz or a higher cut
   would thin the voice. On the Yaris film the 49.8 Hz tone went from 15 dB over its neighbours to under 1 dB.
+- Polish years after a preposition need the ordinal in say.json: "z 2013 roku" is "z dwa tysiące
+  trzynastego roku"; num2words gives the cardinal, which sounds wrong to a native ear.
 - Read the manifest before generating: every line that starts in lower case or ends without a full stop.
   sentences() now carries a cue with no end punctuation over any pause, but a stop put in the wrong place
   ("1-2 kilometry." / "Na godzine."), a one-word orphan and a comma break before "ze" still split a
