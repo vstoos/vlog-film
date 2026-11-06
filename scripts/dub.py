@@ -1,13 +1,17 @@
-"""Dub a finished film into another language (Polish or English) in the user's cloned voice.
+"""Dub a finished film into another language (Polish, English, Ukrainian) in the user's cloned voice.
 
-  python dub.py gen <subs.srt> <ref.wav> <out_dir> [from_s] [to_s] --lang pl --cfg 0.3 --exag 0.8
+  python dub.py gen <subs.srt> <ref.wav|-> <out_dir> [from_s] [to_s] --lang pl
   <whisperx python> dub_check.py <out_dir> <lang>      checks every take, writes out_dir/checks.json
-  python dub_regen.py <out_dir> <ref.wav> --lang pl    new takes for changed or glitched sentences
+  python dub_regen.py <out_dir> <ref.wav|-> --lang pl  new takes for changed or glitched sentences
   python dub.py mix <film.mp4> <out_dir> [from_s] [to_s]
 
-gen: subtitle cues are joined into whole sentences (Chatterbox swallows words in fragments),
-     numbers are written out, and every sentence is spoken N times by Chatterbox Multilingual (MIT)
-     in the voice of ref.wav. out_dir/say.json {lang: {"written": "spoken"}} holds the project's
+gen: subtitle cues are joined into whole sentences (the models swallow words in fragments),
+     numbers are written out, and every sentence is spoken N times in the voice of the reference.
+     "-" takes the user's saved voice for the language (config "voices_dir", voices.json); a .wav
+     given instead needs its transcript next to it as <ref>.txt for Higgs.
+     --engine higgs (default, config "tts_engine"): Higgs TTS 3 in WSL, see higgs_tts.py;
+     --engine chatterbox: Chatterbox Multilingual (MIT) in this Python, with --cfg / --exag.
+     out_dir/say.json {lang: {"written": "spoken"}} holds the project's
      names and abbreviations, applied after ranges became words ("4,6 do 4,8").
 mix: the best take of each sentence (fewest flags, then highest word match) goes at the sentence's
      first cue, cut after its last word, pauses muted. A line that does not fit is sped up (at most
@@ -19,6 +23,7 @@ references/dubbing.md has the whole method.
 import argparse
 import json
 import os
+import platform
 import re
 import subprocess
 import sys
@@ -99,10 +104,30 @@ def speakable_en(text):
     return re.sub(r"\s+", " ", t).strip()
 
 
+def speakable_uk(text):
+    """Ukrainian text for TTS: numbers, ranges, units and symbols written out."""
+    from num2words import num2words
+
+    def num(m):
+        v = m.group(0).replace(" ", "")
+        try:
+            return num2words(float(v.replace(",", ".")) if "," in v else int(v), lang="uk")
+        except Exception:
+            return m.group(0)
+    t = text.replace("–", " до ").replace("км/год", "кілометрів на годину").replace("%", " відсотків")
+    t = replace_say(t)
+    t = re.sub(r"\bл/100 км\b", "літрів на сто кілометрів", t)
+    t = re.sub(r"\bкм\b", "кілометрів", t)
+    t = re.sub(r"\d{1,3}(?: \d{3})+|\d+,\d+|\d+", num, t)
+    return re.sub(r"\s+", " ", t).strip()
+
+
 def speakable(text, lang="pl"):
     """Polish text for TTS: numbers, ranges, units and symbols written out."""
     if lang == "en":
         return speakable_en(text)
+    if lang == "uk":
+        return speakable_uk(text)
     from num2words import num2words
 
     def num(m):
@@ -119,27 +144,70 @@ def speakable(text, lang="pl"):
     return re.sub(r"\s+", " ", t).strip()
 
 
+def voice(lang, ref="-"):
+    """(reference wav, its transcript) for a language: the saved voice for "-", else ref and <ref>.txt."""
+    if ref in (None, "", "-"):
+        d = cfg.get("voices_dir") or "C:/Data/voices"
+        v = json.load(open(os.path.join(d, "voices.json"), encoding="utf-8"))[lang]
+        return os.path.join(d, v["wav"]), v["text"]
+    txt = os.path.splitext(ref)[0] + ".txt"
+    return ref, (open(txt, encoding="utf-8").read().strip() if os.path.exists(txt) else None)
+
+
+def wsl_path(p):
+    p = os.path.abspath(p).replace("\\", "/")
+    return "/mnt/%s%s" % (p[0].lower(), p[2:]) if re.match(r"[A-Za-z]:/", p) else p
+
+
+def synth(jobs, lang, ref, engine="higgs", cfg_weight=0.3, exag=0.8):
+    """Speak jobs [(text, out_wav, seed)] in the reference voice; takes already on disk are kept (Higgs)."""
+    ref_wav, ref_text = voice(lang, ref)
+    if engine == "chatterbox":
+        import torch
+        import torchaudio as ta
+        from chatterbox.mtl_tts import ChatterboxMultilingualTTS
+        model = ChatterboxMultilingualTTS.from_pretrained(device="cuda:%d" % cfg.cuda_index())
+        for n, (text, f, seed) in enumerate(jobs):
+            torch.manual_seed(seed)
+            wav = model.generate(text, language_id=lang, audio_prompt_path=ref_wav, cfg_weight=cfg_weight, exaggeration=exag)
+            ta.save(f, wav.cpu(), model.sr)
+            print("%3d/%d  %s" % (n + 1, len(jobs), text[:70]), flush=True)
+        return
+    if not ref_text:
+        raise SystemExit("Higgs needs the reference's transcript: put it in %s.txt" % os.path.splitext(ref_wav)[0])
+    win = platform.system() == "Windows"
+    p = wsl_path if win else os.path.abspath
+    spec = {"ref": p(ref_wav), "ref_text": ref_text, "model": cfg.get("higgs_model") or "bosonai/higgs-tts-3-4b",
+            "jobs": [{"text": t, "out": p(f), "seed": s} for t, f, s in jobs]}
+    jf = os.path.join(os.path.dirname(os.path.abspath(jobs[0][1])), "_higgs_jobs.json")
+    json.dump(spec, open(jf, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    # CUDA_DEVICE_ORDER=PCI_BUS_ID: higgs_gpu is the index nvidia-smi shows
+    env = "HF_HOME=%s CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=%s" % (
+        cfg.get("higgs_hf_home") or "~/higgs/hf", cfg.get("higgs_gpu") or "0")
+    cmd = "%s %s/bin/python %s %s" % (env, cfg.get("higgs_venv") or "~/higgs/.venv",
+                                      p(os.path.join(os.path.dirname(os.path.abspath(__file__)), "higgs_tts.py")), p(jf))
+    run = ["wsl", "-d", cfg.get("higgs_distro") or "Ubuntu", "--", "bash", "-lc", cmd] if win else ["bash", "-lc", cmd]
+    subprocess.run(run, check=True)
+    missing = [f for _, f, _ in jobs if not os.path.exists(f)]
+    if missing:
+        raise SystemExit("Higgs wrote %d of %d takes; first missing: %s" % (len(jobs) - len(missing), len(jobs), missing[0]))
+
+
 def gen(a):
-    import torch
-    import torchaudio as ta
-    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-    model = ChatterboxMultilingualTTS.from_pretrained(device="cuda:%d" % cfg.cuda_index())
     load_say(a.out, a.lang)
     sents = [s for s in sentences(srt(a.subs)) if a.start <= s[0] < a.end]
     os.makedirs(os.path.join(a.out, "takes"), exist_ok=True)
-    manifest = []
+    manifest, jobs = [], []
     for i, (s, e, text) in enumerate(sents):
         say = speakable(text, a.lang)
-        files = []
-        for k in range(a.takes):
-            torch.manual_seed(1000 * i + k)
-            wav = model.generate(say, language_id=a.lang, audio_prompt_path=a.ref, cfg_weight=a.cfg, exaggeration=a.exag)
-            f = os.path.join(a.out, "takes", "%03d_%d.wav" % (i, k))
-            ta.save(f, wav.cpu(), model.sr)
-            files.append(f)
+        files = [os.path.join(a.out, "takes", "%03d_%d.wav" % (i, k)) for k in range(a.takes)]
+        # Higgs takes one seed per batch, so take k of every line shares seed 7 + k
+        jobs += [(say, f, 1000 * i + k if a.engine == "chatterbox" else 7 + k) for k, f in enumerate(files)]
         manifest.append({"start": s, "end": e, "text": text, "say": say, "takes": files})
-        print("%3d/%d %6.1f s  %s" % (i + 1, len(sents), s, say[:70]), flush=True)
+    # the manifest first: an interrupted Higgs run is resumed by running gen again (finished takes are kept)
     json.dump(manifest, open(os.path.join(a.out, "manifest.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print("%d sentences, %d takes, engine %s" % (len(sents), len(jobs), a.engine), flush=True)
+    synth(jobs, a.lang, a.ref, a.engine, a.cfg, a.exag)
 
 
 def clean(x, sr=SR, floor=-17.0, hf_floor=-14.0, depth=-45.0):
@@ -297,6 +365,7 @@ if __name__ == "__main__":
     g.add_argument("start", nargs="?", type=float, default=0.0); g.add_argument("end", nargs="?", type=float, default=1e9)
     g.add_argument("--takes", type=int, default=3); g.add_argument("--cfg", type=float, default=0.5)
     g.add_argument("--exag", type=float, default=0.5); g.add_argument("--lang", default="pl")
+    g.add_argument("--engine", choices=["higgs", "chatterbox"], default=cfg.get("tts_engine") or "higgs")
     m = sub.add_parser("mix")
     m.add_argument("film"); m.add_argument("out")
     m.add_argument("start", nargs="?", type=float, default=0.0); m.add_argument("end", nargs="?", type=float, default=1e9)

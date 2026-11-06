@@ -12,6 +12,8 @@ All of these go into the footage folder next to the final mp4.
 - Credits: music titles from YouTube Audio Library; map attribution if a route map is used
   ("Sentinel-2 cloudless 2016 © EOX IT Services GmbH (contains modified Copernicus Sentinel data,
   CC BY 4.0), roads © OpenStreetMap contributors, routing OSRM").
+- A film with a Higgs voice track or voice-over: "Voice: AI clone of the author's voice, Boson AI's
+  Higgs Audio" near the top, not buried at the end (the licence's condition for monetised videos).
 - Referral links the user gives (e.g. a Tesla referral link) go in the description
   and on the end card.
 

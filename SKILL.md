@@ -110,9 +110,12 @@ auto-dubbing. The user can watch renders on a phone through `python $K/media_ser
 
 ### 7. Dubbed audio tracks
 
-For a language the user wants heard, not read: `references/dubbing.md`. The subtitles go through
+For a language the user wants heard, not read: `references/dubbing.md`. The voice is Higgs TTS 3
+(default since 06.11.2026) with the user's saved reference **in that language** (`C:/Data/voices`, pass
+`-`); every film description with a Higgs track credits "Boson AI's Higgs Audio". The subtitles go through
 `dub.py gen`, `dub_check.py` catches the model's glitches take by take, `dub_regen.py` replaces what
 failed, and `dub.py mix` builds the track and prints what to listen to. Fix pronunciation in `say.json`.
+Voice-over for silent footage (dash-cam clips) takes the same route in Ukrainian, written as subtitles.
 Do not call a dub clean from the checks alone: the user's ear is the last step.
 
 ## Privacy

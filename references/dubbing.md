@@ -4,29 +4,61 @@ An extra audio track for YouTube: the film's subtitles spoken in the user's clon
 film's own road and music. Built on the Yaris film (Ukrainian to Polish and English, 24 min).
 A cloned voice needs "AI use: yes" on upload. Only clone the user's own voice.
 
-Polish and English work now (speakable() in dub.py writes out numbers for these two). Another
-language needs its own speakable().
+Polish, English and Ukrainian work (speakable() in dub.py writes out numbers for these). Another
+language needs its own speakable(). Ukrainian is for voice-over on silent footage (dash-cam clips):
+the same .srt route, with the commentary written as subtitles.
+
+## The voice model: Higgs TTS 3 (default)
+
+Chosen by the user on 06.11.2026 over Chatterbox ("two heads above"), StyleTTS2 and HolosTTS:
+Higgs TTS 3 (Boson AI, `bosonai/higgs-tts-3-4b`) through vLLM-Omni, offline, `scripts/higgs_tts.py`.
+`--engine chatterbox` still works (the old route, with --cfg / --exag).
+
+- **The reference must be in the language spoken.** From the Ukrainian reference, Polish came out
+  accented with a glitch after every word; from a Polish recording of the user, clean. Chatterbox has
+  no Ukrainian at all (through its Russian model: a heavy Russian accent).
+- **The user's voices** are in `C:/Data/voices` (config `"voices_dir"`): `<lang>.wav`, its exact
+  transcript in `<lang>.txt` and in `voices.json`. Pass `-` as the reference to use them. Private:
+  never commit or upload them. A new one: 10-20 s in a parked car or a quiet room, the user's normal
+  tone, cut on whole sentences, transcript checked with WhisperX, numbers written as spoken.
+- **Licence.** Research/non-commercial, plus a Creator Use Grant: monetised videos on the user's own
+  channel are allowed if the video's description visibly credits **"Boson AI's Higgs Audio"** (put it
+  in every description of a film with a Higgs track). Higgs output must not train other speech models.
+- Loading takes 1-2 min per run, so gen and regen send all lines in one run (batched per seed).
 
 ## Setup
 
-The model and WhisperX do not fit one Python, so this uses two. Make a second venv and put it in
-config.json as `"dub_python"` (torch 2.6 cu124 worked; `chatterbox-tts`, `demucs`, `num2words`,
-`soundfile`). Everything `dub_check.py` needs is in the main Python.
+Three Pythons: the main one (WhisperX, `dub_check.py`), `"dub_python"` for dub.py (num2words,
+soundfile, demucs; chatterbox-tts for the old engine), and a Linux venv for Higgs. vLLM-Omni is
+Linux-only; on Windows it lives in WSL (Docker is not needed):
+
+```
+# in WSL Ubuntu, no sudo needed
+uv venv ~/higgs/.venv -p 3.12 && source ~/higgs/.venv/bin/activate
+uv pip install vllm==0.32.0 --torch-backend=cu130 && uv pip install vllm-omni==0.32.0
+vllm download-kernels        # FlashInfer cubins; without them it wants nvcc and dies at start
+HF_HOME=~/higgs/hf uvx --from "huggingface_hub[cli]" hf download bosonai/higgs-tts-3-4b   # 9.3 GB, not gated
+```
+
+config.json: `"tts_engine": "higgs"`, `"voices_dir"`, `"higgs_distro": "Ubuntu"`, `"higgs_venv"`,
+`"higgs_hf_home"`, `"higgs_gpu"` (the nvidia-smi index of the 24 GB card; it takes about 85% of it).
 
 ## Steps
 
-1. **Reference voice.** `python $K/dub_find_refs.py <footage> <project>/transcripts --cut ref 8` ranks
-   stretches of the user's speech by voice over noise. Generate one sentence per reference, let the
-   user choose by ear. Recording at a stop beats anything from the road, which adds artifacts. Look at
-   the chosen reference's spectrum too: the model copies its hum into every line (see below).
+1. **Reference voice.** The saved one (`-`) unless the user wants another. From footage:
+   `python $K/dub_find_refs.py <footage> <project>/transcripts --cut ref 8` ranks stretches of the
+   user's speech by voice over noise; generate one sentence per reference, let the user choose by ear.
+   Recording at a stop beats anything from the road, which adds artifacts. For another language ask
+   the user to record one (above): it beats any reference in the film's language.
 2. **Pronunciation.** `<out>/say.json`: `{"pl": {"GPS": "dzi pi es"}, "en": {"Katowice": "Katoveetseh"}}`.
    Names, abbreviations, clock times. Fix them here, and only regenerate those sentences.
-3. **Generate.** `$D $K/dub.py gen <subs.srt> ref/ref.wav <out> --lang pl --takes 3 --cfg 0.3 --exag 0.8`
-   Long: run it in the background. On a 24 GB card two runs fit (give each a time
-   range, then `$D $K/dub_merge.py <subs> <out> <part>...` with DUB_LANG set), and a 6 GB card fits one
-   with 20-30% of the film. `CUDA_DEVICE_ORDER=PCI_BUS_ID` makes CUDA_VISIBLE_DEVICES match nvidia-smi.
+3. **Generate.** `$D $K/dub.py gen <subs.srt> - <out> --lang pl --takes 3`. Long: run it in the
+   background. Interrupted, run the same command again: finished takes are kept. With
+   `--engine chatterbox`: `--cfg 0.3 --exag 0.8`, and two runs fit on 24 GB (give each a time range,
+   then `$D $K/dub_merge.py <subs> <out> <part>...` with DUB_LANG set). `CUDA_DEVICE_ORDER=PCI_BUS_ID`
+   makes CUDA_VISIBLE_DEVICES match nvidia-smi.
 4. **Check.** `python $K/dub_check.py <out> <lang>`: every take, in the background; finished takes are skipped.
-5. **Fix.** `$D $K/dub_regen.py <out> ref/ref.wav --lang pl` makes new takes for sentences with no
+5. **Fix.** `$D $K/dub_regen.py <out> - --lang pl` makes new takes for sentences with no
    clean take and for changed text, then run the check again. Repeat while it finds sentences; `--dry` lists them.
 6. **Mix.** `$D $K/dub.py mix <film.mp4> <out> --slow 0.92`. `--slow` is for a language shorter than
    the original (English from Ukrainian), so the voice stops less between lines. The log ends with
@@ -36,6 +68,17 @@ config.json as `"dub_python"` (torch 2.6 cu124 worked; `chatterbox-tts`, `demucs
 `$D` is the dub Python. A changed line: edit the .srt and "text" in manifest.json, then steps 5, 4, 6.
 
 ## What the model gets wrong, and what catches it
+
+Higgs traps found while wiring it in:
+- vLLM-Omni returns a batch in the order the lines finish, not the order sent: takes landed on the
+  wrong sentences (every take flagged, score 0.1). higgs_tts.py sorts by the request id's index.
+- The pipeline's sampling has a fixed seed (42), so repeated takes of a line were identical;
+  higgs_tts.py sets the seed per batch (take k of every line: seed 7 + k; regen 100 + k).
+- The HTTP server (`vllm serve ... --omni`) started in WSL but refused every connection, even from
+  WSL itself; the offline engine has no network and works.
+- A root-owned `~/.cache/huggingface/hub/.locks` in WSL broke downloads: give each venv its own HF_HOME.
+- The example script names output files from the Latin letters of the text: every Cyrillic line was
+  "prompt.wav", each overwriting the last.
 
 Chatterbox with low cfg and high exaggeration sounds most like the person, but about half the takes
 run on after the sentence: a pop like a cork, a hum, or the sentence again. Fragments shorter than a

@@ -1,6 +1,7 @@
 """New takes for the sentences that need them; run dub_check.py after it, and repeat if flags remain.
 
-usage: python dub_regen.py <out_dir> <ref.wav> --lang pl [--takes 3] [--cfg 0.3] [--exag 0.8] [--dry]
+usage: python dub_regen.py <out_dir> <ref.wav|-> --lang pl [--takes 3] [--engine higgs|chatterbox] [--dry]
+("-" is the saved voice for the language, as in dub.py gen; --cfg / --exag are Chatterbox's)
 A sentence gets new takes when its text changed (speakable differs from "say"; its old takes are
 dropped) or when every take has flags (new takes join the old ones). Takes are named by subtitle time
 and number, so a later run overwrites nothing. Edit "text" in manifest.json along with the .srt.
@@ -22,6 +23,7 @@ def main():
     ap.add_argument("out"); ap.add_argument("ref")
     ap.add_argument("--takes", type=int, default=3); ap.add_argument("--cfg", type=float, default=0.3)
     ap.add_argument("--exag", type=float, default=0.8); ap.add_argument("--lang", default="pl")
+    ap.add_argument("--engine", choices=["higgs", "chatterbox"], default=cfg.get("tts_engine") or "higgs")
     ap.add_argument("--dry", action="store_true", help="only list what would be regenerated")
     a = ap.parse_args()
     path = os.path.join(a.out, "manifest.json")
@@ -35,12 +37,9 @@ def main():
         for m in todo:
             print("  %.1f  %s" % (m["start"], m["text"][:70]))
         return
-    import torch
-    import torchaudio as ta
-    from chatterbox.mtl_tts import ChatterboxMultilingualTTS
-    model = ChatterboxMultilingualTTS.from_pretrained(device="cuda:%d" % cfg.cuda_index())
     takes = os.path.join(a.out, "regen")
     os.makedirs(takes, exist_ok=True)
+    jobs = []
     for i, m in enumerate(todo):
         say = dub.speakable(m["text"], a.lang)
         if say != m["say"]:
@@ -48,13 +47,13 @@ def main():
         stem = "%07d" % (m["start"] * 100)
         first = sum(n.startswith(stem) for n in os.listdir(takes))
         for k in range(first, first + a.takes):
-            torch.manual_seed(5000 + 1000 * i + k)
-            wav = model.generate(say, language_id=a.lang, audio_prompt_path=a.ref, cfg_weight=a.cfg, exaggeration=a.exag)
             f = os.path.join(takes, "%s_%d.wav" % (stem, k))
-            ta.save(f, wav.cpu(), model.sr)
+            # take number k picks the seed, so a later round never repeats an earlier take
+            jobs.append((say, f, 5000 + 1000 * i + k if a.engine == "chatterbox" else 100 + k))
             m["takes"].append(f)
-        print(i + 1, say[:80], flush=True)
-        json.dump(man, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    dub.synth(jobs, a.lang, a.ref, a.engine, a.cfg, a.exag)
+    json.dump(man, open(path, "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+    print(len(jobs), "new takes", flush=True)
 
 
 if __name__ == "__main__":
