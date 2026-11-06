@@ -46,7 +46,8 @@ subtitles go there too, because that is where the user looks. Working files go i
    Sorted by time this is the story order.
 2. Look before deciding: `python $K/contact_sheet.py <out.png> 6 <clips...>` for clips, a tiled sheet
    for photos; view the images yourself. Note portrait clips (rotation -90/90), clips that show
-   licence plates, the dash-cam files, screen recordings.
+   licence plates, the dash-cam files, screen recordings. Tesla dash-cam / Sentry events from the
+   trip dates: references/teslacam.md (finding the incident, colour via `teslacam_grade.py`).
 3. `python $K/transcribe_all.py <footage> transcripts`: word-timed WhisperX transcript of every
    talking clip (resumable, language from config). Read them all; they are the story's raw material.
 
@@ -125,6 +126,8 @@ user's home; do not put other people's faces (children above all) on thumbnails 
 - `references/project_template.py`: annotated project file to copy; EDL syntax.
 - `references/example_yaris.py`: the finished Yaris film, all features in use.
 - `references/lessons.md`: HDR, audio, cutting and framing traps, with the fixes that worked.
+- `references/teslacam.md`: Tesla dash-cam / Sentry clips (HW3): finding the incident in a saved
+  event, and the colour correction (`scripts/teslacam_grade.py`).
 - `references/youtube.md`: description, chapters, thumbnail, subtitles, dubbing, end screen.
 - `references/dubbing.md`: own audio tracks in the user's cloned voice, and automatic glitch checks.
 - `references/example_make_route.py`: animated route map (Sentinel-2 tiles + OSRM roads) from the
