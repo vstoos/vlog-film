@@ -17,6 +17,19 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   the whole range must be "keep"; automatic gap cutting would remove exactly the point.
 - **Lost thoughts**: if the user says a phrase hangs ("де я вибрав собі зупинку?..."), the answer is
   usually a nearby range left out of the EDL; search the transcript after the cut point.
+- **Cutting one word out of a phrase** ("я і дружина достали отримали тут", Mercedes film): find the
+  word edges on the voice energy at 10-25 ms steps, then make 2-3 short mp3 samples of the joint with
+  different cut points (ffmpeg atrim + concat from the source) and let the user choose by ear.
+  WhisperX cannot judge a joint this short: it wrote "тримали" for every sample, while the user
+  heard "дотримали" in one and a clean "отримали" in another. The winner started the cut just
+  before the onset spike of the removed word and ended it in the dip before the next word.
+  If the phrase is also in the teaser (HOOK), give the teaser the same cut.
+- **filmkit moves cut edges to the neighbouring words.** islands() stretches a range end up to
+  the next word's start (minus 0.05 s) and a range start back to the previous word's end, so a
+  cut inside a phrase lands somewhere else than the EDL says. To pin it, insert the removed word
+  into the transcript as a marker (`{"w": "достали", "s": ..., "e": ...}`) with its start 0.05 s
+  after the wanted cut start and its end 0.05 s before the next range starts; add the range end
+  to HARD_ENDS so the sentence is not completed. Check the .mlt entries with timeline.entries().
 - After any change near a cut, verify on the finished film, not on the source.
 
 ## Audio
@@ -75,3 +88,8 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   be compared.
 - When the user's memory of what they said differs from the recording, tell them what the
   recording says (e.g. receipt says 13.28 l, not 19 l) before changing captions.
+- **Check what the author says against the footage.** In the Mercedes film the author said twice
+  that the car had no cruise control, while the stalk clip in the same film showed distance
+  control; it had adaptive cruise and lacked only lane keeping. Before showing a cut, compare
+  claims about equipment, numbers and places with the inserts, photos and screenshots; point out
+  the conflict and let the author decide (cut the claim, or correct it in a caption).

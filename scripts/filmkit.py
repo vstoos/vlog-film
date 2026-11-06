@@ -42,7 +42,7 @@ HOOK, EDL, MUSIC = [], [], {}
 MAKE_STILLS = None
 
 
-FB, FL = vf.ff_font(vf.FONT_BOLD), vf.ff_font(vf.FONT_LIGHT)   # drawtext fonts
+FB = vf.ff_font(vf.FONT_BOLD)   # drawtext font; light faded on road footage
 
 
 def roll_for(road):
@@ -97,9 +97,9 @@ def render_road(name, segs, title=None, sub=None, top=False):
         ).format(fb=FB, e=esc, n=name, yt=y_t, am=alpha.format(a=0.8, b=1.8, c=length - 1.5, d=length - 0.5))
         for i in range(len(subs)):
             chain += (
-                "drawtext=fontfile='{fl}':textfile='{e}/{n}_s{i}.txt':fontsize=46:"
-                "fontcolor=white:alpha='{a}':x=(w-text_w)/2:y={ys}+{dy}:shadowcolor=black@0.6:shadowx=2:shadowy=2,"
-            ).format(fl=FL, e=esc, n=name, i=i, a=asub, ys=y_s, dy=i * 70)
+                "drawtext=fontfile='{fb}':textfile='{e}/{n}_s{i}.txt':fontsize=50:"     # bold: light faded on road footage
+                "fontcolor=white:alpha='{a}':x=(w-text_w)/2:y={ys}+{dy}:shadowcolor=black@0.8:shadowx=3:shadowy=3,"
+            ).format(fb=FB, e=esc, n=name, i=i, a=asub, ys=y_s, dy=i * 70)
         chain += "fade=t=in:st=0:d=0.5,fade=t=out:st=%s:d=0.5," % (length - 0.5)
         # SDR white -> HLG graphics white, so text does not blaze at peak
         chain += "libplacebo=colorspace=bt2020nc:color_primaries=bt2020:color_trc=arib-std-b67:range=tv:format=yuv420p10le"
@@ -133,12 +133,12 @@ def caption_chain(name, length, title, sub, white="white"):
     esc = OUT.replace(":", "\\:")
     alpha = "if(lt(t,{a}),0,if(lt(t,{b}),(t-{a})/0.6,if(lt(t,{c}),1,if(lt(t,{d}),({d}-t)/0.6,0))))"
     return (
-        "drawbox=x=0:y=ih-230:w=iw:h=230:color=black@0.45:t=fill,"
+        "drawbox=x=0:y=ih-230:w=iw:h=230:color=black@0.6:t=fill,"
         "drawtext=fontfile='{fb}':textfile='{e}/{nm}_t.txt':expansion=none:fontsize=64:"
         "fontcolor={w}:alpha='{a1}':x=(w-text_w)/2:y=h-200:shadowcolor=black@0.6:shadowx=2:shadowy=2,"
-        "drawtext=fontfile='{fl}':textfile='{e}/{nm}_s.txt':expansion=none:fontsize=48:"
+        "drawtext=fontfile='{fb}':textfile='{e}/{nm}_s.txt':expansion=none:fontsize=48:"
         "fontcolor={w}:alpha='{a2}':x=(w-text_w)/2:y=h-110:shadowcolor=black@0.6:shadowx=2:shadowy=2,"
-    ).format(fb=FB, fl=FL, e=esc, nm=name, w=white,
+    ).format(fb=FB, e=esc, nm=name, w=white,
              a1=alpha.format(a=0.4, b=1.0, c=length - 1.0, d=length - 0.4),
              a2=alpha.format(a=0.8, b=1.4, c=length - 1.0, d=length - 0.4))
 
@@ -329,8 +329,9 @@ def islands(clip, a, b, keep):
                     spans[-1][1] = e
     out = []
     for s, e in spans:
-        prev_e = max([w[1] for w in allw if w[1] <= s + 0.02] + [0.0])
-        next_s = min([w[0] for w in allw if w[0] >= e - 0.02] + [envelope(clip)[0].size * ENV_HOP])
+        # w[0] < s, w[1] > e: a 20 ms word ("В") must not count as its own neighbour
+        prev_e = max([w[1] for w in allw if w[1] <= s + 0.02 and w[0] < s - 0.005] + [0.0])
+        next_s = min([w[0] for w in allw if w[0] >= e - 0.02 and w[1] > e + 0.005] + [envelope(clip)[0].size * ENV_HOP])
         lo_lim, hi_lim = max(prev_e + 0.05, s - 0.8, 0.0), min(next_s - 0.05, e + 1.0)
         if keep:
             lo = max(lo_lim, min(s, quiet_before(clip, s, lo_lim)))
