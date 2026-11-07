@@ -2,7 +2,8 @@
 
 usage: python render_final.py <film_dir> <name> <dest.mp4>
   reads <film_dir>/<name>.mlt, writes <film_dir>/<name>_raw.mp4 and <name>.mp4, copies to <dest.mp4>
-Takes about as long as the film itself (or longer): run it in the background.
+With hevc_nvenc (config "hevc_encoder") about a third of the film's length, with libx265 about as long as
+the film or longer: run it in the background.
 Prints loudness (want about -14 LUFS), duration, codec/HDR tags (want Main 10, arib-std-b67,
 bt2020) and a green-frame count (want 0; melt turns rotated 10-bit clips green).
 """
@@ -23,11 +24,19 @@ def run(args, **kw):
 def main(film_dir, name, dest):
     os.chdir(film_dir)
     raw, final = name + "_raw.mp4", name + ".mp4"
-    x265 = "colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc:range=limited:log-level=error"
+    if vf.HEVC_ENCODER == "hevc_nvenc":
+        # about 3x faster than libx265 (20 s of film: 11 s against 31 s), same Main 10 / HLG tags, SSIM 0.995
+        # to it; melt's filters still run on the CPU. "nvenc_gpu" in config.json picks the card (NVENC's own
+        # numbering, not nvidia-smi's: on the Mercedes machine 0 was the 3090 eGPU, 1 the laptop's 3060).
+        video = ["vcodec=hevc_nvenc", "pix_fmt=p010le", "vprofile=main10", "preset=p6", "rc=vbr", "cq=16", "b=0"]
+        if vf.get("nvenc_gpu") is not None:
+            video.append("gpu=%s" % vf.get("nvenc_gpu"))
+    else:
+        x265 = "colorprim=bt2020:transfer=arib-std-b67:colormatrix=bt2020nc:range=limited:log-level=error"
+        video = ["vcodec=libx265", "pix_fmt=yuv420p10le", "crf=18", "preset=medium", "x265-params=" + x265]
     r = run([vf.MELT, "-quiet", name + ".mlt", "-consumer", "avformat:" + raw,
-             "mlt_image_format=yuv420p10", "color_trc=arib-std-b67", "vcodec=libx265", "pix_fmt=yuv420p10le",
-             "crf=18", "preset=medium", "x265-params=" + x265, "acodec=pcm_s16le", "ar=48000", "channels=2",
-             "real_time=0"])
+             "mlt_image_format=yuv420p10", "color_trc=arib-std-b67", *video,
+             "acodec=pcm_s16le", "ar=48000", "channels=2", "real_time=0"])
     if not os.path.exists(raw):
         sys.exit("melt failed:\n" + r.stderr[-2000:])
 

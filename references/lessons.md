@@ -62,6 +62,9 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
 - Dash-cam horizon: measure roll per car with roll_lr.py; filmkit rotates and zooms just enough.
 - Portrait iPhone clips that are inserts can be cropped to the part that matters (CLIP_FRAME).
 - Long walk-arounds can be sped up (CLIP_SPEED) instead of cut.
+- A phone screenshot over the voice padded to the full frame hides the speaker for 5-8 s each, and the
+  user disliked it (Mercedes film, 25:25): burn_in.py puts portrait pictures at full height on the free
+  side of the face. Screenshots in a row replace each other without fading, or they blink.
 - Composite stills (make_stills): crop app badges like "1 / 5" off screenshots; keep important
   text above the caption band (bottom ~230 px of 1080) so the caption never covers it.
 - For an OBD/Torque screen recording, sample the value every minute (crop the gauge, tile with
@@ -79,6 +82,30 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   fixed that. Check a dense contact sheet (every 0.2 s) of the moments with people.
 - Route maps start at a public point (the first petrol station), never at the user's home.
 - Do not put other people's children or faces on thumbnails without the user asking.
+
+## GPUs and hardware encoders
+
+- **Card numbers change: look them up every session, never reuse one from a note or config.** The
+  user's laptop has an RTX 3060 Laptop (6 GB, internal) and an RTX 3090 (24 GB, eGPU over Thunderbolt).
+  Which is 0 and which is 1 depends on boot order and when the eGPU was plugged in, and each tool
+  counts its own way: on 07.11.2026 nvidia-smi said 0 = 3060, 1 = 3090, while NVENC (`gpu=` in melt or
+  ffmpeg) said 0 = 3090, 1 = 3060, and CUDA by default puts the fastest card first. Before a heavy job:
+  `nvidia-smi --query-gpu=index,name,memory.used,utilization.gpu --format=csv`, and for NVENC check
+  `encoder.stats.sessionCount` during a short test. `CUDA_DEVICE_ORDER=PCI_BUS_ID` makes CUDA follow
+  nvidia-smi. Config values that hold an index (`"gpu"`, `"higgs_gpu"`, `"nvenc_gpu"`) can go stale:
+  check them against nvidia-smi first; `vfconfig.cuda_index()` picks the card with the most memory.
+- **Check the cards are free first.** Other sessions run detection and transcription on them; Higgs
+  takes about 85% of the 3090, WhisperX a few GB. An occupied card means OOM or a crawl for both jobs.
+- **Hardware encoding.** NVENC is a separate block on the card and stays free while CUDA is busy.
+  hevc_nvenc keeps Main 10 and the HLG tags (melt: `vcodec=hevc_nvenc pix_fmt=p010le vprofile=main10
+  preset=p6 rc=vbr cq=16 b=0`; ffmpeg: `vfconfig.hevc_args()`). Measured on 20 s of the Mercedes film:
+  11 s on either card (once warm; the first run up to 21 s) against 31 s for libx265, SSIM 0.995 to
+  it. Thunderbolt did not slow the 3090's NVENC. melt's filters still run on the CPU, so a whole render
+  gains about 2-3x, not more. render_final.py, burn_in.py and blur_plates use NVENC when config
+  `"hevc_encoder"` is `"hevc_nvenc"`.
+- **Sharing the CPU.** When another session is busy, start a long render at below-normal priority
+  (`$p = Start-Process ... -PassThru; $p.PriorityClass = 'BelowNormal'`; child processes inherit it)
+  instead of waiting for the CPU to be free.
 
 ## Process
 

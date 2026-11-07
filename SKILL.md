@@ -60,6 +60,11 @@ photos, maps or stills illustrate which talk. Typical shape:
 - **Title card** on road footage, then talk blocks separated by 4-10 s road inserts under music.
 - Inserts where the talk refers to something: the receipt when fuel is mentioned, the inspection
   stand when the inspection is, a route map at the start of each leg.
+- **Pictures over the voice** (b-roll, phone screenshots, captions while the speaker goes on talking):
+  burn them into the talking clip with `burn_in.py`, before filmkit (it shows a talking clip only while
+  it talks). A portrait picture (screenshot, vertical clip, portrait photo) stands at full frame height
+  on the free side of the speaker's face, found by face detection, so the face stays in view; the
+  phone's clock and buttons fill the top and bottom anyway. A landscape picture covers the frame.
 - Road inserts should show what the story needs at that point (the slip road into the petrol
   station before "we stopped", the airport car park before the scene at the airport), not just any
   motorway: look at a contact sheet of the road clip around the right moment.
@@ -73,11 +78,14 @@ and per-clip options are documented there. Talk ranges come from the transcript 
 
 ```
 python $K/blur_plates.py <footage> <project>/film [--faces] IMG_0089 ...   # plates; --faces: people too
+python $K/burn_in.py film/IMG_0089_blur.mov film/IMG_0089_over.mov spec.json   # pictures over speech, if any
 python $K/filmkit.py <project>/project.py                        # renders inserts, writes film/<name>.mlt
 python $K/render_final.py <project>/film <name> <footage>/<Name>_HLG.mp4   # long: run in background
 ```
 
-`filmkit.py --no-media` only rewrites the .mlt (seconds). The render prints loudness, duration,
+Before a heavy GPU job (render, WhisperX, dubbing) run `nvidia-smi`: card numbers change between
+sessions and differ between tools, and other jobs may hold a card (references/lessons.md, "GPUs and
+hardware encoders"). `filmkit.py --no-media` only rewrites the .mlt (seconds). The render prints loudness, duration,
 codec/HDR tags and a green-frame count: expect about -14 LUFS, Main 10, arib-std-b67, bt2020, 0 green.
 
 ### 4. Verify before telling the user it is done

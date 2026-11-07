@@ -10,23 +10,21 @@
 - How bad: low. Live Photo movies are rarely used as inserts, and photos can be used instead
   (the still HEIC of the same moment).
 
-## render_final.py ignores the configured hardware encoder
+## render_final.py uses NVENC only, not hevc_qsv / hevc_amf / hevc_videotoolbox
 
-- What: the melt render uses vcodec=libx265 (CPU), although config.json sets
-  "hevc_encoder": "hevc_nvenc" and Shotcut's melt lists hevc_nvenc, hevc_qsv and hevc_amf.
-- Where: scripts/render_final.py:28.
-- How found: `melt -query vcodecs` and the source, 2026-11-01. Not tested yet: whether melt with
-  hevc_nvenc keeps Main 10, the HLG tags and picture quality, and how much time it saves (melt's
-  filters still run on the CPU).
-- How bad: medium. Final renders take about 30 min, which slows every review round.
+- What: since 2026-11-07 the melt render follows config "hevc_encoder" for hevc_nvenc (tested: Main 10,
+  HLG tags, SSIM 0.995 to libx265, about 3x faster); any other value still renders with libx265.
+- Where: scripts/render_final.py main().
+- How bad: low. Only matters on a machine without an NVIDIA card.
 
 ## filmkit.py cannot put b-roll or captions over speech
 
 - What: the talking clip is shown only while it talks, so a picture over the voice has no EDL item.
-- Where: scripts/filmkit.py. Workaround: C:/Data/mercedes-video/overlays.py burns them into the talk clip at
-  source seconds, which keeps them in sync through every cut.
+- Where: scripts/filmkit.py. Workaround, now in the skill: scripts/burn_in.py burns them into the talk clip at
+  source seconds before filmkit, which keeps them in sync through every cut (portrait pictures beside the
+  face, 2026-11-07). Left: an EDL item kind in filmkit, so no extra file and no second encode of the clip.
 - How found: Mercedes GLC review, 2026-11-01.
-- How bad: medium. Any film with one long static talk needs this.
+- How bad: low now. The second encode costs about 9 min on a 45-min clip.
 
 ## blur_plates.py floods a long selfie clip with false boxes
 
@@ -115,18 +113,6 @@
   compositing in Python frame by frame (decode again, blur under the mask, pipe to the encoder).
 - How bad: high for any variable-rate source (privacy); iPhone clips looked right so far.
 - Note: the check frames come from the detection pass, so they cannot show this; check the output file.
-
-## Portrait pictures over speech cover the face; put them beside it
-
-- What: a phone screenshot, portrait clip or photo shown over the voice is padded to the full frame
-  (pic_input in the project's overlays.py: scale to 1020 px high, pad 1920x1080 with 0x15181c), so the
-  speaker's face disappears while they keep talking. The user wants the picture beside the face, the face
-  staying visible: the screenshot in the empty half of the frame, the talking head in the other.
-- Where: C:/Data/mercedes-video/overlays.py pic_input()/BROLL (the b-roll-over-speech workaround, see
-  "filmkit.py cannot put b-roll or captions over speech"); belongs in filmkit.py when that feature moves there.
-  Needs a per-clip face side (or face detection) to choose left/right, and a margin, shadow and rounded corners.
-- How found: user's review of the Mercedes GLC film, 25:25-25:59 (Mercedes Me screenshots), 2026-11-07.
-- How bad: medium. Every talk with phone screenshots loses the face for 5-8 s per picture.
 
 ## Tesla dash-cam telemetry (SEI) is not in the skill yet
 

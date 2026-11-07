@@ -42,6 +42,8 @@ HF_HOME=~/higgs/hf uvx --from "huggingface_hub[cli]" hf download bosonai/higgs-t
 
 config.json: `"tts_engine": "higgs"`, `"voices_dir"`, `"higgs_distro": "Ubuntu"`, `"higgs_venv"`,
 `"higgs_hf_home"`, `"higgs_gpu"` (the nvidia-smi index of the 24 GB card; it takes about 85% of it).
+The index changes with boot order and when an eGPU is plugged in: check it against nvidia-smi before
+every run, and that the card is free (references/lessons.md, "GPUs and hardware encoders").
 
 ## Steps
 
