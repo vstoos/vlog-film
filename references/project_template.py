@@ -36,7 +36,8 @@ HOOK = [
 ]
 
 # --- edit decision list ------------------------------------------------------------
-# ("talk", [(clip, from_s, to_s[, "keep"]) ...])
+# ("talk", [(clip, from_s, to_s[, "keep"][, dB]) ...])   dB: extra voice gain for this range
+#       (a stretch spoken softer than the rest of the clip, e.g. slower driving, quieter cabin)
 #       speech; pauses longer than GAP_CUT inside a range become jump cuts unless "keep".
 #       Use "keep" for deliberate silences (engine sound) and for ranges whose end the first-pass
 #       transcript gets wrong: then the range is taken as given, edges only nudged to silence.

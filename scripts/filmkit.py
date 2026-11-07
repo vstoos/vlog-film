@@ -38,7 +38,7 @@ VOICE_TARGET = -20.0   # LUFS each clip's used voice is brought to, per talk blo
 VOICE_GAIN_MAX, VOICE_GAIN_MIN = 14.0, -6.0   # cap the boost, so the quietest clips do not pump up the hiss
 
 CLIP_FRAME, CLIP_SPEED, PORTRAIT_BAND = {}, {}, {}
-CLIP_SRC = {}   # clip -> picture file used as is (no plate blur), e.g. TeslaCam or another folder
+CLIP_SRC = {}   # clip -> landscape picture file used as is: no plate blur, no portrait handling (TeslaCam, burn_in output)
 HOOK, EDL, MUSIC = [], [], {}
 MAKE_STILLS = None
 
@@ -418,17 +418,21 @@ def build(render_media=True):
             for rng in item[1]:
                 clip, a, b = rng[:3]
                 clips.add(clip)
-                for lo, hi, lo_lim, hi_lim in islands(clip, a, b, len(rng) > 3):
-                    pieces.append([clip, lo, hi, lo_lim, hi_lim, 1, 1])
+                # extras: "keep", and/or a number = dB on top of the clip's gain (quieter stretch of a clip)
+                db = sum(x for x in rng[3:] if isinstance(x, (int, float)))
+                for lo, hi, lo_lim, hi_lim in islands(clip, a, b, "keep" in rng[3:]):
+                    pieces.append([clip, lo, hi, lo_lim, hi_lim, 1, 1, db])
             # room tone around the block, so the voice can fade against the music
             if after_insert:
                 p = pieces[0]
                 lo = max(p[3], p[1] - VOICE_XFADE)
-                p[1], p[5] = lo, max(frames(p[1] - lo), frames(0.25))
+                # the fade ends where the speech starts: with no room tone before the first word
+                # (clip starts on it) a 0.25 s floor swallowed it (Helm film 1, 24:23)
+                p[1], p[5] = lo, max(2, frames(p[1] - lo))
             if before_insert:
                 p = pieces[-1]
                 hi = min(p[4], p[2] + VOICE_XFADE)
-                p[2], p[6] = hi, max(frames(hi - p[2]), frames(0.25))
+                p[2], p[6] = hi, max(2, frames(hi - p[2]))     # same at the end ("191" was lost so)
             for p in pieces:
                 # an edge pushed into room tone must not replay a range another block already used
                 for ulo, uhi in used.get(p[0], []):
@@ -443,13 +447,13 @@ def build(render_media=True):
                 gains[clip] = 0.0 if lufs is None else min(VOICE_GAIN_MAX, max(VOICE_GAIN_MIN, VOICE_TARGET - lufs))
                 report.append("voice   %-8s block %2d  %6s LUFS  gain %+5.1f dB"
                               % (clip, k, "-" if lufs is None else "%.1f" % lufs, gains[clip]))
-            for clip, lo, hi, _, _, fin, fout in pieces:
+            for clip, lo, hi, _, _, fin, fout, db in pieces:
                 used.setdefault(clip, []).append((lo, hi))
                 fi, fo = frames(lo), frames(hi)
                 if fo - fi < 6:
                     continue
                 video.append(talk_entry(clip, fi, fo, min(fin, (fo - fi) // 3), min(fout, (fo - fi) // 3),
-                                        gains[clip]))
+                                        min(VOICE_GAIN_MAX, gains[clip] + db)))
                 t_f += fo - fi
             continue
         kind = item[0]
@@ -497,7 +501,7 @@ def build(render_media=True):
 
     body = ""
     for c in sorted(x for x in clips if isinstance(x, str)):
-        if rotated(c):
+        if rotated(c) and c not in CLIP_SRC:     # a CLIP_SRC file is already landscape (e.g. burn_in.py output)
             if render_media:
                 render_portrait(c)
             body += chain_xml(c, "%s/%s_land.mov" % (OUT, c))

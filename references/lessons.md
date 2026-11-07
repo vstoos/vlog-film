@@ -130,3 +130,16 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   control; it had adaptive cruise and lacked only lane keeping. Before showing a cut, compare
   claims about equipment, numbers and places with the inserts, photos and screenshots; point out
   the conflict and let the author decide (cut the claim, or correct it in a caption).
+- Numbers in the first-pass transcript have guessed word times (WhisperX cannot align digits):
+  "191", "1240 чи 1250 кілометрів", "1074", "176,3", "4 700" all came 0.5-2 s early or squeezed
+  into 0.1 s, so islands() cut them off at range ends and jump cuts (Helm film 1, five places).
+  Before building, re-time every number near a range edge or a pause: cut test pieces ending at
+  +0.3/+0.6/+1.0 s and run transcribe_window.py on each; the number is there only when WhisperX
+  hears it whole. Fix the word times in the transcript JSON (keep a backup), not only the range.
+- After a build, transcribe the whole film once and diff it against the EDL's expected words
+  (difflib on normalised words): it lists clipped words in one pass instead of one review note each.
+- Road inserts: the user does not want plates blurred (floating boxes spoil the shot); talk clips:
+  blur_plates.py --green-only (own EV plate only), no faces; the VIN on the car screen always hidden.
+- Horizon: "checked by eye, level" was wrong (user saw 2-3 deg). Judge roll on grid frames rendered
+  at several angles (0, +-2, +-3 with filmkit's rotate+zoom) side by side; roll_lr.py only hints
+  (Helm: Aug 2024 set roll_lr -3.0 -> filmkit +3; Dec 2024 roll_lr +0.9 -> +2 by eye).

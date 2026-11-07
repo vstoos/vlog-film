@@ -2,6 +2,7 @@
 
 usage: python blur_plates.py <footage_dir> <film_dir> [--faces] <clip> [<clip> ...]   e.g. ... IMG_0089
   --faces   also blur every face found (OpenCV YuNet): strangers, staff, children
+  --green-only  blur only green plates (the user's own EV plate), nothing else
 Writes <film_dir>/<clip>_blur.mov (same length, audio copied, rotation baked in) plus
 film/<clip>_mask.mkv and a few check frames in film/plates_check/.
 filmkit.py picks up <film_dir>/<clip>_blur.mov automatically when it exists.
@@ -19,7 +20,8 @@ vf.torch_dlls()   # torch's bundled cuDNN DLLs, which the onnxruntime CUDA provi
 import onnxruntime as ort
 
 FACES = "--faces" in sys.argv
-_ARGS = [a for a in sys.argv[1:] if a != "--faces"]
+GREEN_ONLY = "--green-only" in sys.argv   # only green plates (Polish EV plates: the user's own car), no faces
+_ARGS = [a for a in sys.argv[1:] if a not in ("--faces", "--green-only")]
 SRC, OUT = (_ARGS[0].replace("\\", "/"), _ARGS[1].replace("\\", "/")) if len(_ARGS) > 2 else (None, None)
 MODEL = vf.PLATE_MODEL   # YOLO licence-plate detector, downloaded by setup/setup.py
 CONF = 0.15            # low on purpose: a missed plate is worse than a blurred bumper
@@ -54,6 +56,16 @@ def detect(sess, frame):
     sx, sy = w / nw, h / nh
     return [(boxes[i][0] * sx, boxes[i][1] * sy, boxes[i][2] * sx, boxes[i][3] * sy, float(conf[i]))
             for i in np.array(idx).flatten()]
+
+
+def is_green(frame, box):
+    """A green plate (Polish EV plate): green clearly over red and blue in the box."""
+    x, y, bw, bh = (int(v) for v in box[:4])
+    crop = frame[max(0, y):y + bh, max(0, x):x + bw]
+    if crop.size == 0:
+        return False
+    b, g, r = crop.reshape(-1, 3).mean(axis=0)
+    return g > 1.15 * r and g > 1.05 * b
 
 
 def process(clip):
@@ -93,7 +105,9 @@ def process(clip):
                 if bw >= PLATE_ASPECT * bh and c >= 0.35:
                     # point (u, v) in the turned image is (w-1-v, u) in the frame
                     found.append((w - (y + bh), x, bh, bw, c))
-        if faces is not None:
+        if GREEN_ONLY:
+            found = [d for d in found if is_green(frame, d)]
+        if faces is not None and not GREEN_ONLY:
             _, fs = faces.detect(frame)
             for f in (fs if fs is not None else []):
                 if f[2] > FACE_MAX * w:
