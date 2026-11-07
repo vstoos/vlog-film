@@ -128,7 +128,10 @@ Do not call a dub clean from the checks alone: the user's ear is the last step.
 
 ## Privacy
 
-Blur licence plates in clips and thumbnails, and the faces of staff, passers-by and children
+Plates: the user does not blur ordinary traffic (Poland; the floating box spoils road shots).
+Blur a plate only where the clip shows that driver's possible violation or a near miss, so the film
+cannot feed a complaint against a person; road inserts go in as is via CLIP_SRC in the project.
+Blur the faces of staff, passers-by and children
 (`blur_plates.py --faces`; check the frames, reflections in car paint can fool it); start route maps at a public place, never at the
 user's home; do not put other people's faces (children above all) on thumbnails unless asked.
 

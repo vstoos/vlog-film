@@ -38,6 +38,7 @@ VOICE_TARGET = -20.0   # LUFS each clip's used voice is brought to, per talk blo
 VOICE_GAIN_MAX, VOICE_GAIN_MIN = 14.0, -6.0   # cap the boost, so the quietest clips do not pump up the hiss
 
 CLIP_FRAME, CLIP_SPEED, PORTRAIT_BAND = {}, {}, {}
+CLIP_SRC = {}   # clip -> picture file used as is (no plate blur), e.g. TeslaCam or another folder
 HOOK, EDL, MUSIC = [], [], {}
 MAKE_STILLS = None
 
@@ -228,7 +229,9 @@ def render_photo(name, photo, length, title, sub):
 
 
 def video_src(clip):
-    """The clip's picture source: the plate-blurred copy from blur_plates.py when there is one."""
+    """The clip's picture source: CLIP_SRC, else the plate-blurred copy from blur_plates.py, else SRC."""
+    if clip in CLIP_SRC:
+        return CLIP_SRC[clip]
     blurred = "%s/%s_blur.mov" % (OUT, clip)
     return blurred if os.path.exists(blurred) else "%s/%s.MOV" % (SRC, clip)
 
