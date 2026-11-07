@@ -127,3 +127,22 @@
   Needs a per-clip face side (or face detection) to choose left/right, and a margin, shadow and rounded corners.
 - How found: user's review of the Mercedes GLC film, 25:25-25:59 (Mercedes Me screenshots), 2026-11-07.
 - How bad: medium. Every talk with phone screenshots loses the face for 5-8 s per picture.
+
+## Tesla dash-cam telemetry (SEI) is not in the skill yet
+
+- **What:** Tesla clips from 2025 on carry one protobuf per frame in an H.264 SEI (user data unregistered):
+  4 speed m/s, 5 accelerator, 6 steering deg, 7/8 blinkers, 9 brake, 10 autopilot state, 11/12 lat/lon,
+  14/15/16 acceleration. On the TeslaCam film it found hard braking minutes before the save that the
+  30-second review around each honk missed (6 new candidate scenes).
+- **Where:** prototypes in C:/Data/teslacam-video: tc_sei.py (decoder), tc_sei_scan.py (all front clips to
+  json), tc_sei_find.py (deceleration over 3.5 m/s2 in 0.5 s, steering jumps; skips 1 s at clip edges,
+  where smoothing fakes a speed drop), tc_triage.py, tc_look.py (sheets; -ss must go before -i or
+  drawtext's frame count includes the skipped seconds).
+- **How bad:** medium. Without it a TeslaCam review sees only the seconds around each save.
+- **Cut-ins without braking, and pre-2025 clips (no telemetry):** a vehicle detector over the front camera
+  finds them: torchvision fasterrcnn_mobilenet_v3_large_fpn (COCO, 74 MB from download.pytorch.org) at
+  4 fps, about 2.5 s per one-minute clip with three workers on the 3090; then a car that is close (box
+  bottom below 620 of 960) and moves from outside the lane ahead into it within 3 s
+  (tc_veh_scan.py, tc_veh_find.py in C:/Data/teslacam-video). The plate detector as a stand-in finds
+  daytime cut-ins but nothing at night (headlight glare hides plates). Drop boxes wider than 700 px:
+  the bonnet and glare come out as frame-wide "cars".
