@@ -61,7 +61,11 @@ HEVC_ENCODER = get("hevc_encoder") or "hevc_nvenc"  # hevc_nvenc (NVIDIA), libx2
 def hevc_args():
     """ffmpeg arguments for a 10-bit HEVC intermediate of good quality."""
     if HEVC_ENCODER == "hevc_nvenc":
-        return ["-c:v", "hevc_nvenc", "-profile:v", "main10", "-preset", "p6", "-cq", "14"]
+        # "nvenc_gpu" / VF_NVENC_GPU picks the card in NVENC's own numbering, as in render_final.py;
+        # without it ffmpeg takes NVENC 0, whatever that card is busy with
+        gpu = get("nvenc_gpu")
+        return (["-c:v", "hevc_nvenc", "-profile:v", "main10", "-preset", "p6", "-cq", "14"]
+                + (["-gpu", str(gpu)] if gpu is not None else []))
     if HEVC_ENCODER == "hevc_videotoolbox":
         return ["-c:v", "hevc_videotoolbox", "-profile:v", "main10", "-q:v", "75"]
     return ["-c:v", "libx265", "-pix_fmt", "yuv420p10le", "-crf", "14", "-preset", "medium",
