@@ -65,7 +65,7 @@ def render(out, start, length, clips):
            + ",scale=1920:1080:flags=lanczos,format=yuv420p,"
            "setparams=color_primaries=bt709:color_trc=bt709:colorspace=bt709:range=tv")
     subprocess.run([vf.FFMPEG, "-v", "error", "-y"] + inputs + ["-filter_complex", vfc, "-an",
-                    "-c:v", "libx264", "-crf", "14", "-preset", "slow",
+                    ] + vf.sdr_args() + [
                     "-color_primaries", "bt709", "-color_trc", "bt709", "-colorspace", "bt709", out],
                    check=True)
     print(out)

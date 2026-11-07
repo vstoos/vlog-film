@@ -105,6 +105,14 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   session loading the CPU). The user confirmed it: the 3060 encodes almost as fast as the 3090, and the
   hardware codec is clearly faster than the software one, so any free card will do for a render.
   render_final.py, burn_in.py and blur_plates use NVENC when config `"hevc_encoder"` is `"hevc_nvenc"`.
+- **Every encode goes through the load check (user's rule).** Before parallel encodes, read each card's
+  encoder load and the CPU load and give work only where there is room: `vfconfig.encode_slots()` returns
+  one argument list per job that may run now (2 per card under 40% encoder load, 1 under 75%, none
+  above; 2 libx264 slots when the CPU is under 30%, 1 under 60%). Use the CPU too when it is idle, for
+  the most speed. Intermediates in SDR H.264 use `vfconfig.sdr_args(gpu)` (h264_nvenc). With
+  `CUDA_DEVICE_ORDER=PCI_BUS_ID` NVENC's `-gpu N` is nvidia-smi's card N (tested 07.11.2026 by
+  session counts); encode_slots() sets it. On the TeslaCam film both cards were 50-60% busy encoding for
+  another session, so the check gave one slot, not four.
 - **Sharing the CPU.** When another session is busy, start a long render at below-normal priority
   (`$p = Start-Process ... -PassThru; $p.PriorityClass = 'BelowNormal'`; child processes inherit it)
   instead of waiting for the CPU to be free.

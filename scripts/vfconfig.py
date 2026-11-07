@@ -9,6 +9,7 @@ import json
 import os
 import platform
 import shutil
+import subprocess
 
 SKILL_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 _CFG_PATH = os.path.join(SKILL_DIR, "config.json")
@@ -70,6 +71,44 @@ def hevc_args():
         return ["-c:v", "hevc_videotoolbox", "-profile:v", "main10", "-q:v", "75"]
     return ["-c:v", "libx265", "-pix_fmt", "yuv420p10le", "-crf", "14", "-preset", "medium",
             "-x265-params", "log-level=error"]
+
+
+def sdr_args(gpu=None):
+    """ffmpeg arguments for an 8-bit SDR H.264 intermediate (dash-cam parts): NVENC when the config uses it.
+    gpu: the card in NVENC's numbering (default "nvenc_gpu", else NVENC 0)."""
+    if HEVC_ENCODER == "hevc_nvenc":
+        gpu = gpu if gpu is not None else get("nvenc_gpu")
+        return (["-c:v", "h264_nvenc", "-preset", "p6", "-rc", "vbr", "-cq", "14", "-b:v", "0", "-pix_fmt", "yuv420p"]
+                + (["-gpu", str(gpu)] if gpu is not None else []))
+    return ["-c:v", "libx264", "-crf", "14", "-preset", "medium", "-pix_fmt", "yuv420p"]
+
+
+def encode_slots(per_card=2, cpu=2):
+    """Parallel SDR encode slots by the load right now: a list of sdr_args() lists, one per job that may run.
+    Each NVENC card gets per_card slots when its encoder is under 40% busy, one under 75%, none above
+    (other sessions encode too); the CPU gets `cpu` libx264 slots when under 30% load, one under 60%.
+    Sets CUDA_DEVICE_ORDER=PCI_BUS_ID, which makes NVENC's -gpu N the card nvidia-smi calls N."""
+    os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    slots = []
+    if HEVC_ENCODER == "hevc_nvenc":
+        try:
+            out = subprocess.run(["nvidia-smi", "--query-gpu=index,utilization.encoder", "--format=csv,noheader,nounits"],
+                                 capture_output=True, text=True, timeout=20).stdout
+            for ln in out.strip().splitlines():
+                idx, util = [int(v) for v in ln.split(",")]
+                n = per_card if util < 40 else 1 if util < 75 else 0
+                slots += [sdr_args(idx)] * n
+        except (OSError, ValueError, subprocess.SubprocessError):
+            pass
+    try:
+        load = float(subprocess.run(["powershell", "-NoProfile", "-Command",
+                                     "(Get-CimInstance Win32_Processor | Measure-Object LoadPercentage -Average).Average"],
+                                    capture_output=True, text=True, timeout=30).stdout.strip() or 100)
+    except (OSError, ValueError, subprocess.SubprocessError):
+        load = 100.0
+    n = cpu if load < 30 else 1 if load < 60 else 0
+    slots += [["-c:v", "libx264", "-crf", "14", "-preset", "medium", "-pix_fmt", "yuv420p"]] * n
+    return slots or [sdr_args()]
 
 
 def ff_font(path):
