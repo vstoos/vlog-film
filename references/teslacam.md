@@ -42,3 +42,13 @@ Worked out on the Helm 2026 film (Model 3, built Nov 2020, HW3). Use `scripts/te
   Another car or HW revision may need a new fit; repeat it the same way if colours look off.
 - Repeaters need only levels and a little saturation.
 - Grade in SDR, then let filmkit convert SDR -> HLG like dash-cam footage.
+- **Curve limits.** A night clip gives black point 0 and a sunny or snowy one white point 1.0 or more
+  (p99.8 above 235). At 0 the curve repeats 0/0 and ffmpeg refuses it; near 1 the 0.92 point crowds 1/1
+  and the spline overshoots into inverted, solarised colours (a sunlit Gdansk street, a car wash in
+  snow). chain() now keeps the black point at 0.005 or more and the white point at 0.95 or less.
+- **Variable frame rate.** Dash-cam files report r_frame_rate like 272500000/7546337; frame-exact work
+  (masks, blurs) must count frames, not trust timestamps or r_frame_rate (BACKLOG: blur_plates drift).
+- **Compilation of saved events** (TeslaCam film, 2026-11): event.json holds the save time; files are
+  one minute per camera named by their start, so save + a .. save + b comes from joining the minute
+  files. About 40 of 90 saves showed nothing (parking, the horn at home): look at a tile of the 30 s
+  before every save first, and check every scene on frames yourself before writing commentary.

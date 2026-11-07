@@ -50,7 +50,8 @@ def chain(clips, cam=None):
     clips = [clips] if isinstance(clips, str) else clips
     cam = cam or camera(clips[0])
     lo, hi = luma_percentiles(clips)
-    lo, hi = max(lo, 0.0), min(max(hi, 0.8), 1.0)
+    # lo 0 repeats the 0/0 point and curves fails; hi near 1 crowds 1/1 and the spline overshoots: inverted colours
+    lo, hi = max(lo, 0.005), min(max(hi, 0.8), 0.95)
     curves = "curves=all='0/0 %.3f/0.0 %.3f/0.46 %.3f/0.92 1/1'" % (lo, (lo + hi) / 2, hi)
     parts = [CROP[cam], "format=gbrp", curves]
     parts += [MATRIX, "eq=saturation=1.1"] if cam == "front" else ["eq=saturation=1.05"]

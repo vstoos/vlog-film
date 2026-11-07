@@ -94,6 +94,8 @@ sentence lose words, which is why cues are joined into sentences first.
 | Swallowed words | `missing` |
 | Sound between words that survived | `stray`: 120+ ms of sound outside all aligned words |
 | Click inside speech | `pop`: 22+ dB jump within 5 ms, gone in 40 ms |
+| Click at a line's end ("like a radio") | load(): drops the last 60 ms (TAIL), 60 Hz high-pass, raised-cosine fades 15 ms in / 80 ms out. See below |
+| Hiss floor 20 dB under the voice | load(): denoise(), stationary spectral subtraction; the gate then has nothing to switch on and off |
 | Stalls, rushed or dragged takes | `gap`, `pace` |
 
 Measured on the Yaris film: at every spot the listener reported a sound after a sentence, the take
@@ -103,6 +105,21 @@ and the same 60 takes without them raised nothing. About 6% of takes were flagge
 they are a list to listen to, not proof: a name heard differently (Yaris, Jaris) raises `missing`.
 None of this judges how natural the voice sounds, and quiet glitches inside a word can pass. The ear
 stays last.
+
+The radio click, measured on the TeslaCam film (Ukrainian, 148 Higgs takes, voice over silence):
+- Higgs ends a take on the last word with no silence after it (133 of 148: file end = aligned word
+  end), and the codec decodes its last frames without look-ahead: the last 60 ms rise 4 dB (p90 14 dB)
+  with a DC step. That burst, cut off, is the radio click. Text endings ("...", an extra word, a blank
+  line) did not give the model a quiet tail; dropping the 60 ms did.
+- Every take also had a hiss/rumble floor about -20 dB under the voice (the reference: -44 dB); gating
+  it in pauses sounded like a squelch. denoise() brings it to about -42 dB.
+- HUM_FILTER's narrow notches ring for 0.5 s after each line (-50 down to -98 dBFS): masked under road
+  noise, audible over silence. Over silent footage use only the high-pass.
+- Check of the finished track: per line end, level 20-300 ms after it and any jump; clicks over the
+  whole track as 8 kHz steps far above their surroundings. The same takes through the old load():
+  30 of 37 line ends and 34 clicks; through the new one: 0 and 0.
+- A one-word sentence at the start of a line ("Sarny. Here is why...") was dropped in all takes, and
+  recognition missed it too, so no flag: put such words inside a sentence.
 
 Traps from the way there:
 - Align the wanted text, not the heard text: heard numbers come as digits, get no timing, and the cut

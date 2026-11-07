@@ -85,3 +85,45 @@
 - Better: an EDL flag for an exact edge, e.g. r("44:14.44!", ...), that skips the word snapping and the
   sentence completion for that edge.
 - How bad: medium. Every mid-phrase word cut needs transcript surgery today.
+
+## dub_check.py does not flag a word the model dropped when recognition misses it too
+
+- What: "Sarny. Here is why I drive slowly in the forest." (Ukrainian): all 4 Higgs takes dropped the
+  one-word sentence "Сарни.", WhisperX heard only the rest, and the takes scored 0.82-0.94 with no
+  `missing` flag. Found only by transcribing the finished voice track.
+- Where: scripts/dub_check.py, the word match / `missing` logic (a leading short word seems to be skipped).
+- How found: TeslaCam compilation, 2026-11-07, C:/Data/teslacam-video (line s13b, takes dub/takes/026_*).
+- Workaround: put one-word sentences inside a longer sentence (written in references/dubbing.md).
+- How bad: medium. A missing word at a line's start ships unnoticed unless someone listens.
+
+## The finished-track click check lives only in the TeslaCam project
+
+- What: C:/Data/teslacam-video/tc_audio_check.py checks a finished voice track: level after every line
+  end, jumps there, and clicks as 8 kHz steps. It caught the radio click (30 of 37 line ends on the old
+  load()) where per-take checks did not. dub.py mix has no such step.
+- Better: move it into scripts/ (reading the line positions mix already knows) and run it at the end of mix.
+- How bad: low-medium.
+
+## blur_plates.py: the mask video can drift off the plates on variable-rate footage
+
+- What: the mask is written as a constant-rate video and laid over the clip by ffmpeg overlay, which
+  pairs frames by timestamp. On Tesla dash-cam clips (variable rate, r_frame_rate like 272500000/7546337)
+  the mask drifted: a BMW plate at the A1 toll plaza stayed half readable although every check frame
+  (drawn from the detection pass) showed the box in place.
+- Where: scripts/blur_plates.py, process(): the ffv1 mask + overlay graph.
+- How found: TeslaCam compilation, 2026-11-07. Fixed there in C:/Data/teslacam-video/tc_blur.py by
+  compositing in Python frame by frame (decode again, blur under the mask, pipe to the encoder).
+- How bad: high for any variable-rate source (privacy); iPhone clips looked right so far.
+- Note: the check frames come from the detection pass, so they cannot show this; check the output file.
+
+## Portrait pictures over speech cover the face; put them beside it
+
+- What: a phone screenshot, portrait clip or photo shown over the voice is padded to the full frame
+  (pic_input in the project's overlays.py: scale to 1020 px high, pad 1920x1080 with 0x15181c), so the
+  speaker's face disappears while they keep talking. The user wants the picture beside the face, the face
+  staying visible: the screenshot in the empty half of the frame, the talking head in the other.
+- Where: C:/Data/mercedes-video/overlays.py pic_input()/BROLL (the b-roll-over-speech workaround, see
+  "filmkit.py cannot put b-roll or captions over speech"); belongs in filmkit.py when that feature moves there.
+  Needs a per-clip face side (or face detection) to choose left/right, and a margin, shadow and rounded corners.
+- How found: user's review of the Mercedes GLC film, 25:25-25:59 (Mercedes Me screenshots), 2026-11-07.
+- How bad: medium. Every talk with phone screenshots loses the face for 5-8 s per picture.

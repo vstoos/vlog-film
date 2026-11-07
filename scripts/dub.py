@@ -241,7 +241,7 @@ def clean(x, sr=SR, floor=-17.0, hf_floor=-14.0, depth=-45.0):
     keep = np.convolve(on.astype(float), np.ones(15), "full")[:n] > 0   # 150 ms after ...
     keep = keep | np.concatenate([on[6:], np.zeros(6, bool)])               # ... and 60 ms before
     gain = np.repeat(np.where(keep, 1.0, 10 ** (depth / 20)), hop)
-    ramp = np.ones(sr // 125) / (sr // 125)
+    ramp = np.ones(sr // 33) / (sr // 33)   # 30 ms: an 8 ms ramp opened the gate with a click, like a radio
     gain = np.convolve(gain, ramp, "same")
     gain = np.concatenate([gain, np.full(len(x) - len(gain), gain[-1])])
     return (x * gain).astype(np.float32)
@@ -253,18 +253,50 @@ VOICE_LIFT = 2.0   # dB over the original voice's level: synthetic speech is har
 CHECKS = {}   # take file -> dub_check.py result: end of its last word (the model may run on after it), score, flags
 
 
+TAIL = 0.06   # s: Higgs decodes the last codec frames without look-ahead: +4 dB (p90 +14 dB) and a DC step, "like a radio"
+
+
+def denoise(x, sr, floor=0.12):
+    """Stationary noise out: the model adds a hiss/rumble floor about 20 dB under the voice (the reference
+    has it at -44 dB), and gating that floor in pauses on and off is what sounds like a radio squelch.
+    Noise profile = mean spectrum of the quietest fifth of the frames; Wiener-like gain, smoothed."""
+    from scipy.ndimage import uniform_filter
+    from scipy.signal import istft, stft
+    if len(x) < sr // 2:
+        return x
+    _, _, X = stft(x, sr, nperseg=1024, noverlap=768)
+    mag = np.abs(X)
+    e = mag.sum(0)
+    noise = mag[:, e <= np.percentile(e, 20)].mean(1, keepdims=True)
+    gain = uniform_filter(np.clip(1 - 1.5 * noise / (mag + 1e-9), floor, 1), size=(3, 5))
+    _, y = istft(X * gain, sr, nperseg=1024, noverlap=768)
+    return y[:len(x)].astype(np.float32)
+
+
 def load(f):
     x, sr = sf.read(f, dtype="float32")
-    if CHECKS.get(f, {}).get("end"):
-        x = x[:int((CHECKS[f]["end"] + 0.15) * sr)]
     if x.ndim > 1:
         x = x.mean(1)
+    stop = len(x) - int(TAIL * sr)
+    if CHECKS.get(f, {}).get("end"):
+        stop = min(stop, int((CHECKS[f]["end"] + 0.15) * sr))
+    x = x[:max(stop, sr // 10)]
+    from scipy.signal import butter, sosfiltfilt
+    x = sosfiltfilt(butter(2, 60, "highpass", fs=sr, output="sos"), x).astype(np.float32)   # DC and rumble, before any fade
+    x = denoise(x, sr)
     # float64 positions: on Windows numpy's default int is 32-bit and arange * sr overflows (audio loops)
     x = np.interp(np.arange(int(len(x) * SR / sr), dtype=np.float64) * (sr / SR), np.arange(len(x)), x).astype(np.float32)
     x = clean(x)
     fr = np.abs(x[:len(x) // 960 * 960]).reshape(-1, 960).max(1)   # trim silence: 20 ms frames
     on = np.nonzero(fr > fr.max() * 10 ** (-45 / 20))[0]
-    return x[max(0, on[0] - 2) * 960:(on[-1] + 3) * 960] if len(on) else x
+    if len(on):
+        x = x[max(0, on[0] - 2) * 960:(on[-1] + 3) * 960]
+    # fades: a take cut 0.15 s after its last word, or one that starts at full level, clicks at the edge
+    # raised cosine, 15 ms in and 80 ms out: a straight 40 ms ramp off a word still left a thump
+    fi, fo = min(len(x) // 4, SR * 15 // 1000), min(len(x) // 4, SR * 8 // 100)
+    x[:fi] *= (0.5 - 0.5 * np.cos(np.linspace(0, np.pi, fi))).astype(np.float32)
+    x[len(x) - fo:] *= (0.5 + 0.5 * np.cos(np.linspace(0, np.pi, fo))).astype(np.float32)
+    return x
 
 
 def ffmpeg(*args):
