@@ -65,6 +65,11 @@ every run, and that the card is free (references/lessons.md, "GPUs and hardware 
 6. **Mix.** `$D $K/dub.py mix <film.mp4> <out> --slow 0.92`. `--slow` is for a language shorter than
    the original (English from Ukrainian), so the voice stops less between lines. The log ends with
    lines off their subtitles and flags left on the chosen takes: **those are the list to listen to**.
+   Under the dub goes the film's own track, voice included, 28 dB down wherever the original voice talks
+   (`--bed original`, voice-over style; music and road inserts stay at full level), then one linear
+   loudness gain. The user chose this over `--bed separated` (demucs strips the voice, -8 dB): what demucs
+   leaves behind is noise, and ducking it under each line plus the dynamic loudnorm made it swell in every
+   pause. -14 / -18 / -22 dB were too loud for the user; `--bed-db` sets another level.
 7. Upload `dub.wav`. The user listens to `preview.mp4` first.
 
 `$D` is the dub Python. A changed line: edit the .srt and "text" in manifest.json, then steps 5, 4, 6.

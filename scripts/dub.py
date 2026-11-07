@@ -330,6 +330,31 @@ def take_rank(f, m):
     return (-len(c.get("flags", [])), c.get("score", 0), -len(load(f)))
 
 
+BED_DB = {"original": -28.0,   # voice-over: the whole original track, voice included, well under the dub (user: quieter than -22)
+          "separated": -8.0}   # the film's sound without its voice (demucs): what it leaves there is noise
+
+
+def bed(rest, orig, osr, out, db, gap=3.0, ramp=1.0):
+    """The bed under the dub (the original track, or its sound without the voice), steady and `db`
+    quieter wherever the original voice talks (pauses under `gap` s count as talk), at full level in
+    music and road inserts, `ramp` s fades between. Ducking under each dubbed line made the left-over
+    noise swell in every pause between lines; the user preferred the original voice kept, quietly."""
+    x, sr = sf.read(rest, dtype="float32")
+    hop = osr // 10
+    n = len(orig) // hop
+    lv = 10 * np.log10((orig[:n * hop].reshape(-1, hop) ** 2).mean(1) + 1e-12)
+    talk = lv > np.percentile(lv, 95) - 30
+    idx = np.nonzero(talk)[0]
+    for p, q in zip(idx[:-1], idx[1:]):
+        if q - p <= gap * 10:
+            talk[p:q] = True
+    g = np.where(talk, 10 ** (db / 20), 1.0)
+    k = int(ramp * 10)
+    g = np.convolve(np.concatenate([np.full(k, g[0]), g, np.full(k, g[-1])]), np.ones(k) / k, "same")[k:-k]
+    g = np.interp(np.arange(len(x)) * (osr / sr) / hop, np.arange(len(g)), g).astype(np.float32)
+    sf.write(out, x * (g[:, None] if x.ndim > 1 else g), sr)
+
+
 def mix(a):
     man = json.load(open(os.path.join(a.out, "manifest.json"), encoding="utf-8"))
     CHECKS.update(json.load(open(os.path.join(a.out, "checks.json"), encoding="utf-8")))
@@ -377,12 +402,19 @@ def mix(a):
     for s, fl, text in glitches:
         print("   %2d:%04.1f  %s  %s" % (s // 60, s % 60, fl, text[:60]))
     sf.write(os.path.join(a.out, "voice.wav"), voice[:int(dur * SR)], SR)
-    rest = os.path.join(stems, "no_vocals.wav")
-    ffmpeg("-i", rest, "-i", os.path.join(a.out, "voice.wav"), "-filter_complex",
-           "[0:a]aresample=48000[b];[1:a]aresample=48000," + HUM_FILTER + ",pan=stereo|c0=c0|c1=c0,asplit[v][key];"
-           "[b][key]sidechaincompress=threshold=0.02:ratio=4:attack=20:release=400[d];"   # road and music dip under the voice
-           "[d][v]amix=inputs=2:normalize=0,loudnorm=I=-14:TP=-1:LRA=11", "-ar", "48000",
-           os.path.join(a.out, "dub.wav"))
+    rest = tmp + "_film.wav" if a.bed == "original" else os.path.join(stems, "no_vocals.wav")
+    bed(rest, orig, osr, tmp + "_bed.wav", a.bed_db if a.bed_db is not None else BED_DB[a.bed])
+    graph = ("[0:a]aresample=48000[b];[1:a]aresample=48000," + HUM_FILTER + ",pan=stereo|c0=c0|c1=c0[v];"
+             "[b][v]amix=inputs=2:normalize=0")
+    mixed = [cfg.FFMPEG, "-hide_banner", "-i", tmp + "_bed.wav", "-i", os.path.join(a.out, "voice.wav"), "-filter_complex"]
+    # linear loudness (one gain for the whole track): the dynamic loudnorm raised the noise in every pause
+    err = subprocess.run(mixed + [graph + ",loudnorm=I=-14:TP=-1:LRA=11:print_format=json", "-f", "null", "-"],
+                         capture_output=True, text=True, encoding="utf-8", errors="replace").stderr
+    m = json.loads(err[err.rindex("{"):err.rindex("}") + 1])
+    ffmpeg(*mixed[2:], graph + (",loudnorm=I=-14:TP=-1:LRA=11:measured_I={input_i}:measured_TP={input_tp}:"
+                                "measured_LRA={input_lra}:measured_thresh={input_thresh}:offset={target_offset}:"
+                                "linear=true").format(**m),
+           "-ar", "48000", os.path.join(a.out, "dub.wav"))
     ffmpeg("-ss", str(a.start), "-t", str(dur), "-i", a.film, "-i", os.path.join(a.out, "dub.wav"),
            "-map", "0:v:0", "-map", "1:a:0", "-c:v", "copy", "-tag:v", "hvc1", "-c:a", "aac", "-b:a", "256k",
            "-movflags", "+faststart", os.path.join(a.out, "preview.mp4"))
@@ -402,5 +434,8 @@ if __name__ == "__main__":
     m.add_argument("film"); m.add_argument("out")
     m.add_argument("start", nargs="?", type=float, default=0.0); m.add_argument("end", nargs="?", type=float, default=1e9)
     m.add_argument("--slow", type=float, default=1.0, help="slowest tempo for lines shorter than the original, e.g. 0.92")
+    m.add_argument("--bed", choices=["original", "separated"], default="original",
+                   help="under the dub: the original track, voice kept (voice-over), or its sound without the voice")
+    m.add_argument("--bed-db", type=float, help="how much quieter the bed is under the talk (default by --bed)")
     a = ap.parse_args()
     gen(a) if a.cmd == "gen" else mix(a)

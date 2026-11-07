@@ -7,7 +7,10 @@ one covers the frame.
 
 usage: python burn_in.py <clip.mov> <out.mov> <spec.json>
 spec: {"broll": [[second, length, picture, second in the picture, speed?], ...],
-       "captions": [[second, length, title, subtitle], ...]}
+       "captions": [[second, length, title, subtitle, "top"?], ...],   # "top": band at the top
+       "mute": [[start, end], ...],          # a tongue click or knock in a pause: silenced, picture untouched
+       "arrows": [[[t, x, y], ...], ...]}    # an arrow whose tip follows these points (track() makes them);
+                                             # {"keys": [...], "side": "left"}: the arrow comes from the upper left
 From a project script: import burn_in; burn_in.burn(clip, out, broll, captions).
 """
 import json
@@ -113,18 +116,20 @@ def text_file(folder, name, text):
     return path.replace(":", "\\:")
 
 
-def caption(folder, name, t0, n, title, sub, white="0xBFBFBF"):
-    """Band, title and subtitle between t0 and t0+n, on the absolute time of the stream."""
+def caption(folder, name, t0, n, title, sub, where="bottom", white="0xBFBFBF"):
+    """Band, title and subtitle between t0 and t0+n, on the absolute time of the stream. where="top" puts
+    the band at the top of the frame, for a picture whose subject sits low (an arrow pointing there)."""
     alpha = "if(lt(t,{a}),0,if(lt(t,{b}),(t-{a})/0.5,if(lt(t,{c}),1,if(lt(t,{d}),({d}-t)/0.5,0))))".format(
         a=t0, b=t0 + 0.5, c=t0 + n - 0.5, d=t0 + n)
     en = "between(t,%s,%s)" % (t0, t0 + n)
-    return ("drawbox=x=0:y=ih-230:w=iw:h=230:color=black@0.6:t=fill:enable='{en}',"
+    band, yt, ys = ("0", "30", "120") if where == "top" else ("ih-230", "h-200", "h-110")
+    return ("drawbox=x=0:y={band}:w=iw:h=230:color=black@0.6:t=fill:enable='{en}',"
             "drawtext=fontfile='{fb}':textfile='{tt}':expansion=none:fontsize=60:fontcolor={w}:alpha='{a}':"
-            "x=(w-text_w)/2:y=h-200:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',"
+            "x=(w-text_w)/2:y={yt}:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',"
             "drawtext=fontfile='{fb}':textfile='{ts}':expansion=none:fontsize=46:fontcolor={w}:alpha='{a}':"
-            "x=(w-text_w)/2:y=h-110:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',").format(
+            "x=(w-text_w)/2:y={ys}:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',").format(
         en=en, fb=vf.ff_font(vf.FONT_BOLD), tt=text_file(folder, name + "t", title),
-        ts=text_file(folder, name + "s", sub), w=white, a=alpha)
+        ts=text_file(folder, name + "s", sub), w=white, a=alpha, band=band, yt=yt, ys=ys)
 
 
 def plan(clip, broll):
@@ -142,9 +147,84 @@ def plan(clip, broll):
     return out
 
 
-def burn(clip, out, broll=(), captions=(), start=None, length=None):
-    """Write `out`: `clip` with the b-roll and captions burnt in at its own seconds, sound copied.
-    start/length render only that window (a test); the items keep their clip times."""
+def track(pic, at, n, x, y, speed=1.0, step=0.1, t0=0.0):
+    """Follow the point (x, y) (px of a 1920x1080 frame) through `pic` from second `at`, for n seconds of
+    film played at `speed`: Lucas-Kanade flow on features around the point, median move per frame.
+    Returns keyframes [(t0 + film second, x, y), ...] every `step` s, for arrows=[...] in burn()."""
+    import cv2
+    w, h = 960, 540
+    raw = subprocess.run([vf.FFMPEG, "-v", "error", "-ss", str(at), "-t", str(n * speed), "-i", pic, "-vf",
+                          "fps=30,scale=%d:%d" % (w, h), "-f", "rawvideo", "-pix_fmt", "gray", "-"],
+                         capture_output=True).stdout
+    frames = np.frombuffer(raw, np.uint8)[:len(raw) // (w * h) * w * h].reshape(-1, h, w)
+    px, py = x / 2, y / 2
+    pos = [(px, py)]
+    for a, b in zip(frames[:-1], frames[1:]):
+        mask = np.zeros_like(a)
+        cv2.circle(mask, (int(px), int(py)), 40, 255, -1)
+        pts = cv2.goodFeaturesToTrack(a, 40, 0.01, 4, mask=mask)
+        if pts is not None:
+            nxt, ok, _ = cv2.calcOpticalFlowPyrLK(a, b, pts, None, winSize=(31, 31), maxLevel=3)
+            d = (nxt - pts)[ok.ravel() == 1].reshape(-1, 2)
+            if len(d):
+                px, py = px + float(np.median(d[:, 0])), py + float(np.median(d[:, 1]))
+        pos.append((px, py))
+    keys = []
+    for k in range(int(n / step) + 1):
+        i = min(len(pos) - 1, int(round(k * step * speed * 30)))
+        keys.append((round(t0 + k * step, 3), round(pos[i][0] * 2, 1), round(pos[i][1] * 2, 1)))
+    return keys
+
+
+ARROW = 180   # px, tip at the bottom left: the arrow comes in from the upper right
+
+
+def arrow_png(path, side="right"):
+    """A yellow arrow with a dark outline on transparency, pointing to its bottom-left corner (coming in
+    from the upper right); side="left": mirrored, coming in from the upper left to its bottom-right corner."""
+    from PIL import Image, ImageDraw
+    s = 4   # drawn large, then scaled down: smooth edges
+    im = Image.new("RGBA", (ARROW * s, ARROW * s), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    a = ARROW * s
+    head = [(0, a), (0.18 * a, 0.52 * a), (0.48 * a, 0.82 * a)]          # tip at (0, a)
+    shaft = [(0.24 * a, 0.70 * a), (a * 0.96, 0.02 * a)]
+    for width, colour in ((22 * s, (20, 20, 20, 230)), (12 * s, (255, 214, 0, 255))):
+        d.line(shaft, fill=colour, width=width)
+        d.polygon(head, fill=colour, outline=colour, width=width // 3 if colour[0] == 20 else 0)
+    im = im.resize((ARROW, ARROW), Image.LANCZOS)
+    (im.transpose(Image.FLIP_LEFT_RIGHT) if side == "left" else im).save(path)
+    return path
+
+
+def lerp_expr(keys, i):
+    """ffmpeg expression of coordinate i (1 x, 2 y) of keyframes [(t, x, y), ...], linear between them."""
+    e = "%s" % keys[-1][i]
+    for (ta, *pa), (tb, *pb) in reversed(list(zip(keys[:-1], keys[1:]))):
+        e = "if(lt(t,%s),%s+(%s)*(t-%s)/%s,%s)" % (tb, pa[i - 1], pb[i - 1] - pa[i - 1], ta, max(tb - ta, 1e-3), e)
+    return e
+
+
+def muted(clip, out_wav, mute, floor=0.03, ramp=0.005):
+    """The clip's sound with each (start, end) of `mute` (clip seconds) brought down to `floor`, with
+    `ramp` s edges: a tongue click or a knock in a pause, without cutting the picture (timing stays)."""
+    import soundfile as sf
+    subprocess.run([vf.FFMPEG, "-v", "error", "-y", "-i", clip, "-vn", out_wav], check=True)
+    x, sr = sf.read(out_wav, dtype="float32")
+    t = np.arange(len(x)) / sr
+    g = np.ones(len(x), np.float32)
+    for a, b in mute:
+        d = np.maximum(a - t, t - b)                  # < 0 inside, distance outside
+        g = np.minimum(g, np.clip(floor + (1 - floor) * d / ramp, floor, 1))
+    sf.write(out_wav, x * (g[:, None] if x.ndim > 1 else g), sr)
+    return out_wav
+
+
+def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arrows=()):
+    """Write `out`: `clip` with the b-roll and captions burnt in at its own seconds, sound copied (or with
+    the `mute` moments silenced, see muted()). arrows: keyframe lists from track(), an arrow whose tip
+    follows them (fading in and out). start/length render only that window (a test); the items keep
+    their clip times."""
     folder = out.replace("\\", "/").rsplit("/", 1)[0]
     cut = ["-ss", str(start), "-t", str(length)] if start is not None else []
     inputs, graph, prev = [*cut, "-i", clip], ["[0:v]format=yuv444p10le,setpts=PTS-STARTPTS+%s/TB[v0];" % (start or 0)], "v0"
@@ -157,16 +237,35 @@ def burn(clip, out, broll=(), captions=(), start=None, length=None):
         inputs += args
         graph += [f, overlay(prev, i, s, n, "v%d" % i, x)]
         prev = "v%d" % i
+    for k, arrow in enumerate(arrows):
+        # a keyframe list from track(), or {"keys": [...], "side": "left"} for an arrow from the upper left
+        keys, side = (arrow["keys"], arrow.get("side", "right")) if isinstance(arrow, dict) else (arrow, "right")
+        a, b = keys[0][0], keys[-1][0]
+        if start is not None and not (start < b and a < start + length):
+            continue
+        i += 1
+        inputs += ["-loop", "1", "-framerate", "30", "-t", str(b - a), "-i", arrow_png("%s_arrow%d.png" % (out, k), side)]
+        graph.append("[%d:v]format=yuva444p10le,fade=t=in:st=0:d=0.3:alpha=1,fade=t=out:st=%s:d=0.3:alpha=1,"
+                     "setpts=PTS-STARTPTS+%s/TB[b%d];" % (i, max(0, b - a - 0.3), a, i))
+        graph.append("[%s][b%d]overlay=x='%s-%d':y='%s-%d':format=yuv444p10:eof_action=pass:repeatlast=0:"
+                     "enable='between(t,%s,%s)'[v%d];" % (prev, i, lerp_expr(keys, 1), ARROW if side == "left" else 0,
+                                                           lerp_expr(keys, 2), ARROW, a, b, i))
+        prev = "v%d" % i
     tail = "[%s]" % prev + "".join(caption(folder, "b%d" % k, *c) for k, c in enumerate(captions))
     graph.append(tail + "setpts=PTS-STARTPTS,format=yuv420p10le[out]")
     script = out + "_filter.txt"
     with open(script, "w", encoding="utf-8") as f:
         f.write("\n".join(graph))
+    audio = ["-map", "0:a:0", "-c:a", "copy"]
+    if mute:
+        inputs += [*cut, "-i", muted(clip, out + "_audio.wav", mute)]
+        audio = ["-map", "%d:a:0" % (i + 1), "-c:a", "aac", "-b:a", "256k"]
     subprocess.run([vf.FFMPEG, "-v", "error", "-stats", "-y", "-init_hw_device", "vulkan", *inputs,
-                    "-filter_complex_script", script, "-map", "[out]", "-map", "0:a:0", "-c:a", "copy",
+                    "-filter_complex_script", script, "-map", "[out]", *audio,
                     *vf.hevc_args(), *HLG_TAGS, out], check=True)
 
 
 if __name__ == "__main__":
     spec = json.load(open(sys.argv[3], encoding="utf-8"))
-    burn(sys.argv[1], sys.argv[2], spec.get("broll", []), spec.get("captions", []))
+    burn(sys.argv[1], sys.argv[2], spec.get("broll", []), spec.get("captions", []), mute=spec.get("mute", []),
+         arrows=spec.get("arrows", []))

@@ -71,6 +71,14 @@ def zoom_for(deg):
     return math.cos(a) + 16 / 9 * math.sin(a) + 0.002
 
 
+def fit_size(text, size, width=1920 - 2 * 100):
+    """Font size for one line of `text` in the bold font: `size`, or smaller so it fits `width` px.
+    "Де Mercedes заробляє на пакетах" at 120 ran off both edges of the card (Mercedes film, 16:22)."""
+    from PIL import ImageFont
+    w = ImageFont.truetype(vf.FONT_BOLD, size).getlength(text)
+    return size if w <= width else int(size * width / w)
+
+
 def render_road(name, segs, title=None, sub=None, top=False):
     """Road footage levelled and SDR->HLG. Cards get blur, vignette and fading text."""
     rot = roll_for(segs[0][0])
@@ -92,9 +100,10 @@ def render_road(name, segs, title=None, sub=None, top=False):
         asub = alpha.format(a=1.6, b=2.6, c=length - 1.5, d=length - 0.5)
         chain += (
             "gblur=sigma=3,eq=brightness=-0.08:saturation=0.85,vignette=PI/4,"
-            "drawtext=fontfile='{fb}':textfile='{e}/{n}_t.txt':fontsize=120:"
+            "drawtext=fontfile='{fb}':textfile='{e}/{n}_t.txt':fontsize={fs}:"
             "fontcolor=white:alpha='{am}':x=(w-text_w)/2:y={yt}:shadowcolor=black@0.6:shadowx=3:shadowy=3,"
-        ).format(fb=FB, e=esc, n=name, yt=y_t, am=alpha.format(a=0.8, b=1.8, c=length - 1.5, d=length - 0.5))
+        ).format(fb=FB, e=esc, n=name, yt=y_t, fs=fit_size(title, 120),
+                 am=alpha.format(a=0.8, b=1.8, c=length - 1.5, d=length - 0.5))
         for i in range(len(subs)):
             chain += (
                 "drawtext=fontfile='{fb}':textfile='{e}/{n}_s{i}.txt':fontsize=50:"     # bold: light faded on road footage

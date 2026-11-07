@@ -101,8 +101,10 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   preset=p6 rc=vbr cq=16 b=0`; ffmpeg: `vfconfig.hevc_args()`). Measured on 20 s of the Mercedes film:
   11 s on either card (once warm; the first run up to 21 s) against 31 s for libx265, SSIM 0.995 to
   it. Thunderbolt did not slow the 3090's NVENC. melt's filters still run on the CPU, so a whole render
-  gains about 2-3x, not more. render_final.py, burn_in.py and blur_plates use NVENC when config
-  `"hevc_encoder"` is `"hevc_nvenc"`.
+  gains about 2-3x, not more (the whole Mercedes render: 19 min against 30-40 with libx265, with another
+  session loading the CPU). The user confirmed it: the 3060 encodes almost as fast as the 3090, and the
+  hardware codec is clearly faster than the software one, so any free card will do for a render.
+  render_final.py, burn_in.py and blur_plates use NVENC when config `"hevc_encoder"` is `"hevc_nvenc"`.
 - **Sharing the CPU.** When another session is busy, start a long render at below-normal priority
   (`$p = Start-Process ... -PassThru; $p.PriorityClass = 'BelowNormal'`; child processes inherit it)
   instead of waiting for the CPU to be free.
