@@ -210,12 +210,14 @@ def gen(a):
     synth(jobs, a.lang, a.ref, a.engine, a.cfg, a.exag)
 
 
-def clean(x, sr=SR, floor=-17.0, hf_floor=-14.0, depth=-45.0):
+def clean(x, sr=SR, floor=-17.0, hf_floor=-14.0, depth=-45.0, word_end=None):
     """Mute what the model makes in pauses (low buzz, clicks, a squeak after the last word).
 
     A 10 ms frame is speech when it is loud (within `floor` dB of the take's loud frames) or, for
     quiet consonants like f and s, when its high-frequency part is (`hf_floor`). Pauses under 150 ms
-    stay, speech gets 60 ms before and 150 ms after, and the rest drops by `depth` dB with short ramps."""
+    stay, speech gets 60 ms before and 150 ms after, and the rest drops by `depth` dB with short ramps.
+    `word_end` (s, from dub_check) is where the recogniser heard the last word end: a quiet last word
+    under the gate was muted and then trimmed as silence ("podrozach" at 1:38), so the gate stays open to it."""
     hop = sr // 100
     n = len(x) // hop
     if n < 10:
@@ -236,7 +238,11 @@ def clean(x, sr=SR, floor=-17.0, hf_floor=-14.0, depth=-45.0):
     # a short sound after a clear silence at the very end is the model running on, not a word
     edge = np.diff(np.concatenate([[0], on.astype(int), [0]]))
     starts, ends = np.nonzero(edge == 1)[0], np.nonzero(edge == -1)[0]
-    if len(starts) > 1 and on.sum() > 150 and ends[-1] - starts[-1] < 35 and starts[-1] - ends[-2] >= 18:
+    if word_end is not None and len(starts):
+        w = min(n, int(word_end * 100))
+        before = ends[ends <= w]
+        on[before[-1] if len(before) else starts[0]:w] = True
+    elif len(starts) > 1 and on.sum() > 150 and ends[-1] - starts[-1] < 35 and starts[-1] - ends[-2] >= 18:
         on[starts[-1]:ends[-1]] = False
     keep = np.convolve(on.astype(float), np.ones(15), "full")[:n] > 0   # 150 ms after ...
     keep = keep | np.concatenate([on[6:], np.zeros(6, bool)])               # ... and 60 ms before
@@ -286,7 +292,7 @@ def load(f):
     x = denoise(x, sr)
     # float64 positions: on Windows numpy's default int is 32-bit and arange * sr overflows (audio loops)
     x = np.interp(np.arange(int(len(x) * SR / sr), dtype=np.float64) * (sr / SR), np.arange(len(x)), x).astype(np.float32)
-    x = clean(x)
+    x = clean(x, word_end=CHECKS.get(f, {}).get("end"))
     fr = np.abs(x[:len(x) // 960 * 960]).reshape(-1, 960).max(1)   # trim silence: 20 ms frames
     on = np.nonzero(fr > fr.max() * 10 ** (-45 / 20))[0]
     if len(on):
@@ -355,6 +361,49 @@ def bed(rest, orig, osr, out, db, gap=3.0, ramp=1.0):
     sf.write(out, x * (g[:, None] if x.ndim > 1 else g), sr)
 
 
+def place(man, lens, slow=1.0, lead=3.0, pause=0.35, gap=1.5, fastest=1.3, catch=0.08, brisk=1.15):
+    """Start and tempo of every dubbed line. Lines of one stretch of talk (cues less than `gap` s apart)
+    follow each other with a natural pause and may start up to `lead` s before their cue, so a short
+    translation leaves no hole before each line. Tempo goes line by line: `slow` (or 1.0), plus `catch`
+    per second the line starts behind its cue (to `brisk`), so a long translation catches up gradually;
+    only a stretch that would run into the next one gets faster, to `fastest`. Cue by cue, short lines
+    waited for their cue and long ones were sped up alone: 191 holes over 0.8 s and 28 lines up to 1.3x
+    in the Polish Mercedes dub."""
+    groups, cur = [], [0]
+    for i in range(1, len(man)):
+        if man[i]["start"] - man[i - 1]["end"] < gap:
+            cur.append(i)
+        else:
+            groups.append(cur)
+            cur = [i]
+    groups.append(cur)
+    out, free = [None] * len(man), -1e9
+    for k, g in enumerate(groups):
+        hard = man[groups[k + 1][0]]["start"] - 0.3 if k + 1 < len(groups) else 1e9
+
+        def run(boost):
+            t, res = free, []
+            for j, i in enumerate(g):
+                if j == 0:
+                    at = max(t + 0.15, man[i]["start"])
+                else:
+                    p = min(0.8, pause + 0.5 * max(0.0, man[i]["start"] - man[g[j - 1]]["end"]))
+                    at = max(t + p, man[i]["start"] - lead)
+                behind = max(0.0, at - man[i]["start"] - 0.3)
+                f = min(fastest, min(brisk, max(slow, 1.0 if slow >= 1 else slow) + catch * behind) * boost)
+                res.append((at, f))
+                t = at + lens[i] / f
+            return res, t
+
+        boost = 1.0
+        while run(boost)[1] > hard and boost < fastest:
+            boost += 0.01
+        res, free = run(boost)
+        for i, r in zip(g, res):
+            out[i] = r
+    return out
+
+
 def mix(a):
     man = json.load(open(os.path.join(a.out, "manifest.json"), encoding="utf-8"))
     CHECKS.update(json.load(open(os.path.join(a.out, "checks.json"), encoding="utf-8")))
@@ -371,29 +420,25 @@ def mix(a):
     free = a.start
     timing = []   # (cue start, start lateness, end past the last cue's end)
     glitches = []
-    for i, m in enumerate(man):
-        best = max(m["takes"], key=lambda f: take_rank(f, m))
-        x = load(best)
-        at = max(m["start"], free + 0.15)
-        nxt = man[i + 1]["start"] if i + 1 < len(man) else at + len(x) / SR + 1
-        room = max(m["end"] - at, nxt - at - 0.1, 0.5)
-        if len(x) / SR > room:
+    bests = [max(m["takes"], key=lambda f: take_rank(f, m)) for m in man]
+    takes = [load(f) for f in bests]
+    plan = place(man, [len(x) / SR for x in takes], a.slow)
+    for i, (m, best, x, (at, f)) in enumerate(zip(man, bests, takes, plan)):
+        if not a.start <= at < a.start + dur:     # a window (start, end): only its lines
+            continue
+        if abs(f - 1) > 0.005:
             sf.write(tmp + "_in.wav", x, SR)
-            ffmpeg("-i", tmp + "_in.wav", "-af", "atempo=%.3f" % min(1.3, len(x) / SR / room), tmp + "_out.wav")
-            x, _ = sf.read(tmp + "_out.wav", dtype="float32")
-        elif a.slow < 1 and len(x) / SR < m["end"] - at:   # a line shorter than the original: speak it a bit slower
-            sf.write(tmp + "_in.wav", x, SR)
-            ffmpeg("-i", tmp + "_in.wav", "-af", "atempo=%.3f" % max(a.slow, len(x) / SR / (m["end"] - at)), tmp + "_out.wav")
+            ffmpeg("-i", tmp + "_in.wav", "-af", "atempo=%.3f" % f, tmp + "_out.wav")
             x, _ = sf.read(tmp + "_out.wav", dtype="float32")
         x = x * level_gain(x, orig[int((m["start"] - a.start) * osr):int((m["end"] - a.start) * osr)], SR, osr)
         free = at + len(x) / SR
         timing.append((m["start"], at - m["start"], free - m["end"], m["text"]))
         j = int((at - a.start) * SR)
         voice[j:j + len(x)] += x[:len(voice) - j]
-        print("%3d %6.1f s late %4.1f  score %.2f  %s" % (i + 1, m["start"], at - m["start"], CHECKS.get(best, {}).get("score", 0),
-                                                          m["text"][:60]), flush=True)
+        print("%3d %6.1f s late %4.1f  tempo %.2f  score %.2f  %s" % (i + 1, m["start"], at - m["start"], f,
+                                                                    CHECKS.get(best, {}).get("score", 0), m["text"][:60]), flush=True)
         glitches += [(m["start"], fl, m["text"]) for fl in CHECKS.get(best, {}).get("flags", [])]
-    late = [t for t in timing if t[1] > 0.5 or t[2] > 1.5]
+    late = [t for t in timing if t[1] > 1.5 or t[2] > 1.5]   # place() lets lines drift a little
     print("timing vs subtitles: %d lines, start late max %.1f s, end past cue max %.1f s, %d off by more than 0.5 / 1.5 s"
           % (len(timing), max(t[1] for t in timing), max(t[2] for t in timing), len(late)))
     for s, l, o, text in late:
@@ -433,7 +478,7 @@ if __name__ == "__main__":
     m = sub.add_parser("mix")
     m.add_argument("film"); m.add_argument("out")
     m.add_argument("start", nargs="?", type=float, default=0.0); m.add_argument("end", nargs="?", type=float, default=1e9)
-    m.add_argument("--slow", type=float, default=1.0, help="slowest tempo for lines shorter than the original, e.g. 0.92")
+    m.add_argument("--slow", type=float, default=1.0, help="slowest tempo, for a translation shorter than the original: 0.92 English, 0.94 Polish")
     m.add_argument("--bed", choices=["original", "separated"], default="original",
                    help="under the dub: the original track, voice kept (voice-over), or its sound without the voice")
     m.add_argument("--bed-db", type=float, help="how much quieter the bed is under the talk (default by --bed)")

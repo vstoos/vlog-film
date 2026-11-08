@@ -132,3 +132,20 @@
   (tc_veh_scan.py, tc_veh_find.py in C:/Data/teslacam-video). The plate detector as a stand-in finds
   daytime cut-ins but nothing at night (headlight glare hides plates). Drop boxes wider than 700 px:
   the bonnet and glare come out as frame-wide "cars".
+
+## dub.py clean() mutes a quiet last word of a dubbed line
+
+- What: the speech gate in clean() (floor -17 dB under the take's p95, hf -14 dB) treats a softly spoken
+  last word as a pause and drops it 45 dB, then load() trims it off as silence. The word is in the take
+  and dub_check heard it, so no flag warns. Yaris Polish dub, 1:38: "...w dalekich podróżach" came out
+  as "...w dalekich" (take out_full/takes/013_2.wav, 6.0 s; after load() 4.50 s; with clean() off 5.88 s,
+  with denoise() off 5.24 s, so denoise() makes it worse but clean() does the cutting).
+- Where: scripts/dub.py clean() and load() (load passes nothing about the checked word end).
+- Fix idea: pass CHECKS[f]["end"] (the aligned end of the last word) into clean() and keep the gate open
+  up to it, e.g. the last 1 s before that end; then compare a whole film's voice.wav word count against
+  the chosen takes' "heard" text to catch any other dropped word.
+- How found: the user heard it in a 2:30 test mix on 2026-11-07; WhisperX on voice.wav and on the take.
+- How bad: high. Words vanish from the dub silently, and only listening finds them.
+- Fixed 2026-11-08: clean(word_end=...) holds the gate open from the last speech island to the checked
+  end; 013_2 now loads at 5.82 s. All 1557 Higgs takes of the Yaris PL/EN dubs checked (loaded length
+  vs checked end): none loses a word.

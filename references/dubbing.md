@@ -104,6 +104,7 @@ sentence lose words, which is why cues are joined into sentences first.
 | Click at a line's end ("like a radio") | load(): drops the last 60 ms (TAIL), 60 Hz high-pass, raised-cosine fades 15 ms in / 80 ms out. See below |
 | Hiss floor 20 dB under the voice | load(): denoise(), stationary spectral subtraction; the gate then has nothing to switch on and off |
 | Stalls, rushed or dragged takes | `gap`, `pace` |
+| Wrong stress (Ukrainian "сигналИв", "рУшаю") | nothing automatic (recognition does not hear stress): the user's ear. Fix in say.json with a combining acute (U+0301) after the stressed vowel, `{"uk": {"сигналив": "сигна́лив"}}`; Higgs follows it (TeslaCam: 3 of 4 takes right for each word) and the subtitles stay clean. Let the user pick the take by ear |
 
 Measured on the Yaris film: at every spot the listener reported a sound after a sentence, the take
 ran 0.3-2.5 s past its last word. Of clicks and hums put into 60 clean takes, 46 and 60 were caught,
