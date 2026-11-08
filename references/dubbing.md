@@ -133,6 +133,13 @@ Traps from the way there:
 - Align the wanted text, not the heard text: heard numbers come as digits, get no timing, and the cut
   falls before them.
 - Word match alone picks takes with junk after the sentence, because recognition ignores junk.
+- compare() turned every heard 4-digit count into a clock time ("1000" into "10:00", "dziesięć zero"),
+  so drop_tail() found the text "as complete" without the number and cut it off as a run-on: the Mercedes
+  PL dub said "ponad..." with "tysiąc kilometrów" missing in all 3 takes, with no flag; the EN dub lost
+  "1011 kilometres", "1600 rpm" and, through the same comparison, line ends like "with full force"
+  (16 takes). Fixed 08.11.2026: both readings are compared and the closer one kept. Takes checked before
+  that: drop their checks.json entries where the text has a number or the end is 0.6 s+ before the file
+  end, and run dub_check.py again.
 - Among equal takes prefer the shortest. Preferring the length nearest the cue picked the junk-padded ones.
 - HUM_FILTER assumes a mains frequency of 50 Hz and a man's voice; change it for 60 Hz or a higher cut
   would thin the voice. On the Yaris film the 49.8 Hz tone went from 15 dB over its neighbours to under 1 dB.

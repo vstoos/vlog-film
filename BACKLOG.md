@@ -149,3 +149,13 @@
 - Fixed 2026-11-08: clean(word_end=...) holds the gate open from the last speech island to the checked
   end; 013_2 now loads at 5.82 s. All 1557 Higgs takes of the Yaris PL/EN dubs checked (loaded length
   vs checked end): none loses a word.
+
+## Dubs checked before 08.11.2026 may have numbers cut off line ends
+
+- What: dub_check.py compare() read heard counts like 1000 / 1011 / 1600 as clock times, so drop_tail()
+  cut the number and following words off as a run-on, with no flag. Fixed in dub_check.py on 08.11.2026.
+- Where: dub tracks made earlier: the Yaris film (out_full), the TeslaCam film (C:/Data/teslacam-video), any
+  other. Mercedes PL/EN were rechecked and remixed.
+- How found: the user heard "ponad..." with no "tysiąc kilometrów" at 7:04 of the Mercedes PL dub.
+- Fix for an old dub: references/dubbing.md (drop those checks.json entries, run dub_check.py, remix).
+- How bad: medium-high for published dubs; only listening finds it.

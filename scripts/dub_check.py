@@ -44,9 +44,12 @@ def spoken_words(t):
 
 def compare(want, heard_text, lang):
     """(score, missing, extra, heard words) of the heard text against the wanted words."""
-    heard_text = re.sub(r"\b(1\d|2[0-3])\.?([0-5]\d)\b", r"\1:\2", heard_text)   # recognition writes 17:45 as 1745
-    heard = spoken_words(dub.speakable(heard_text, lang))
-    sm = difflib.SequenceMatcher(None, want, heard, autojunk=False)
+    # Recognition writes 17:45 as 1745, but 1000 and 1600 are counts: read both ways and keep the closer.
+    # Taking 1000 for 10:00 once cut "tysiąc kilometrów" off a line as a run-on (Mercedes PL dub, 7:04).
+    clock = re.sub(r"\b(1\d|2[0-3])\.?([0-5]\d)\b", r"\1:\2", heard_text)
+    sm = max((difflib.SequenceMatcher(None, want, spoken_words(dub.speakable(t, lang)), autojunk=False)
+              for t in {heard_text, clock}), key=lambda s: s.ratio())
+    heard = sm.b
     missing = extra = 0
     for tag, a, b, c, d in sm.get_opcodes():
         if tag != "equal":
