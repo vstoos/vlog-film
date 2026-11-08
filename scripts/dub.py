@@ -340,12 +340,8 @@ BED_DB = {"original": -28.0,   # voice-over: the whole original track, voice inc
           "separated": -8.0}   # the film's sound without its voice (demucs): what it leaves there is noise
 
 
-def bed(rest, orig, osr, out, db, gap=3.0, ramp=1.0):
-    """The bed under the dub (the original track, or its sound without the voice), steady and `db`
-    quieter wherever the original voice talks (pauses under `gap` s count as talk), at full level in
-    music and road inserts, `ramp` s fades between. Ducking under each dubbed line made the left-over
-    noise swell in every pause between lines; the user preferred the original voice kept, quietly."""
-    x, sr = sf.read(rest, dtype="float32")
+def talk_mask(orig, osr, gap=3.0):
+    """100 ms frames where the original voice talks, pauses under `gap` s included: where bed() ducks."""
     hop = osr // 10
     n = len(orig) // hop
     lv = 10 * np.log10((orig[:n * hop].reshape(-1, hop) ** 2).mean(1) + 1e-12)
@@ -354,21 +350,36 @@ def bed(rest, orig, osr, out, db, gap=3.0, ramp=1.0):
     for p, q in zip(idx[:-1], idx[1:]):
         if q - p <= gap * 10:
             talk[p:q] = True
-    g = np.where(talk, 10 ** (db / 20), 1.0)
+    return talk
+
+
+def bed(rest, orig, osr, out, db, gap=3.0, ramp=1.0):
+    """The bed under the dub (the original track, or its sound without the voice), steady and `db`
+    quieter wherever the original voice talks (pauses under `gap` s count as talk), at full level in
+    music and road inserts, `ramp` s fades between. Ducking under each dubbed line made the left-over
+    noise swell in every pause between lines; the user preferred the original voice kept, quietly."""
+    x, sr = sf.read(rest, dtype="float32")
+    hop = osr // 10
+    g = np.where(talk_mask(orig, osr, gap), 10 ** (db / 20), 1.0)
     k = int(ramp * 10)
     g = np.convolve(np.concatenate([np.full(k, g[0]), g, np.full(k, g[-1])]), np.ones(k) / k, "same")[k:-k]
     g = np.interp(np.arange(len(x)) * (osr / sr) / hop, np.arange(len(g)), g).astype(np.float32)
     sf.write(out, x * (g[:, None] if x.ndim > 1 else g), sr)
 
 
-def place(man, lens, slow=1.0, lead=3.0, pause=0.35, gap=1.5, fastest=1.3, catch=0.08, brisk=1.15):
+def place(man, lens, slow=1.0, lead=3.0, pause=0.35, gap=1.5, fastest=1.3, catch=0.08, brisk=1.15, until=None, since=None):
     """Start and tempo of every dubbed line. Lines of one stretch of talk (cues less than `gap` s apart)
     follow each other with a natural pause and may start up to `lead` s before their cue, so a short
     translation leaves no hole before each line. Tempo goes line by line: `slow` (or 1.0), plus `catch`
     per second the line starts behind its cue (to `brisk`), so a long translation catches up gradually;
     only a stretch that would run into the next one gets faster, to `fastest`. Cue by cue, short lines
     waited for their cue and long ones were sped up alone: 191 holes over 0.8 s and 28 lines up to 1.3x
-    in the Polish Mercedes dub."""
+    in the Polish Mercedes dub.
+    `until(t)`: where the talk around time t ends and the bed comes up to full level (a music or road
+    insert). A stretch must be over by then: its pauses shrink first, then it gets faster. Bounded only
+    by the next stretch, the last lines ran up to 3 s into the music (Yaris: 4 places in Polish, 7 in English).
+    `since(t)`: where the talk at a cue starting at t begins; no line starts before it, so a lead or a cue
+    that covers the end of an insert does not put the line over full-level music."""
     groups, cur = [], [0]
     for i in range(1, len(man)):
         if man[i]["start"] - man[i - 1]["end"] < gap:
@@ -380,25 +391,31 @@ def place(man, lens, slow=1.0, lead=3.0, pause=0.35, gap=1.5, fastest=1.3, catch
     out, free = [None] * len(man), -1e9
     for k, g in enumerate(groups):
         hard = man[groups[k + 1][0]]["start"] - 0.3 if k + 1 < len(groups) else 1e9
+        if until:
+            hard = min(hard, max(until(man[g[-1]]["end"]), man[g[-1]]["end"] + 0.2))
 
-        def run(boost):
+        def run(boost, squeeze=1.0):
             t, res = free, []
             for j, i in enumerate(g):
                 if j == 0:
                     at = max(t + 0.15, man[i]["start"])
                 else:
-                    p = min(0.8, pause + 0.5 * max(0.0, man[i]["start"] - man[g[j - 1]]["end"]))
+                    p = squeeze * min(0.8, pause + 0.5 * max(0.0, man[i]["start"] - man[g[j - 1]]["end"]))
                     at = max(t + p, man[i]["start"] - lead)
+                if since:
+                    at = max(at, min(since(man[i]["start"]), man[i]["start"] + 3.0))
                 behind = max(0.0, at - man[i]["start"] - 0.3)
                 f = min(fastest, min(brisk, max(slow, 1.0 if slow >= 1 else slow) + catch * behind) * boost)
                 res.append((at, f))
                 t = at + lens[i] / f
             return res, t
 
-        boost = 1.0
-        while run(boost)[1] > hard and boost < fastest:
+        boost, squeeze = 1.0, 1.0
+        while run(boost, squeeze)[1] > hard and squeeze > 0.4:
+            squeeze -= 0.05
+        while run(boost, squeeze)[1] > hard and boost < fastest:
             boost += 0.01
-        res, free = run(boost)
+        res, free = run(boost, squeeze)
         for i, r in zip(g, res):
             out[i] = r
     return out
@@ -422,7 +439,25 @@ def mix(a):
     glitches = []
     bests = [max(m["takes"], key=lambda f: take_rank(f, m)) for m in man]
     takes = [load(f) for f in bests]
-    plan = place(man, [len(x) / SR for x in takes], a.slow)
+    talk = talk_mask(orig, osr)
+
+    def until(t):   # end of the talk around film time t, less the bed's 0.5 s ramp up
+        i = int((t - a.start) * 10)
+        while 0 <= i < len(talk) and talk[i]:
+            i += 1
+        return a.start + i / 10 - 0.5
+
+    def since(t):   # start of the talk at film time t (or the next talk if t is in an insert), plus the ramp down
+        i = int((t - a.start) * 10)
+        if 0 <= i < len(talk) and not talk[i]:
+            while i < len(talk) and not talk[i]:
+                i += 1
+        else:
+            while i > 0 and talk[i - 1]:
+                i -= 1
+        return a.start + i / 10 + 0.5
+
+    plan = place(man, [len(x) / SR for x in takes], a.slow, until=until, since=since)
     for i, (m, best, x, (at, f)) in enumerate(zip(man, bests, takes, plan)):
         if not a.start <= at < a.start + dur:     # a window (start, end): only its lines
             continue
