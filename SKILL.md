@@ -60,6 +60,8 @@ photos, maps or stills illustrate which talk. Typical shape:
 - **Title card** on road footage, then talk blocks separated by 4-10 s road inserts under music.
 - Inserts where the talk refers to something: the receipt when fuel is mentioned, the inspection
   stand when the inspection is, a route map at the start of each leg.
+- **Trip numbers** (charge captions, battery % on route legs, summary card): collect and check them
+  first, in the project's trip_stats.md, as `references/trip_stats.md` describes.
 - **Pictures over the voice** (b-roll, phone screenshots, captions while the speaker goes on talking):
   burn them into the talking clip with `burn_in.py`, before filmkit (it shows a talking clip only while
   it talks). A portrait picture (screenshot, vertical clip, portrait photo) stands at full frame height
@@ -144,5 +146,8 @@ user's home; do not put other people's faces (children above all) on thumbnails 
   event, and the colour correction (`scripts/teslacam_grade.py`).
 - `references/youtube.md`: description, chapters, thumbnail, subtitles, dubbing, end screen.
 - `references/dubbing.md`: own audio tracks in the user's cloned voice, and automatic glitch checks.
+- `references/trip_stats.md`: trip numbers (car screen, logger, charger apps, tariff): which source
+  wins, the project's trip_stats.md, charge captions with the whole stop time, route legs, summary
+  card, conclusion, how to report them.
 - `references/example_make_route.py`: animated route map (Sentinel-2 tiles + OSRM roads) from the
   Yaris film; adapt its constants (bounds, cities, pins, legs) for a new trip.
