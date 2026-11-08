@@ -353,14 +353,36 @@ def talk_mask(orig, osr, gap=3.0):
     return talk
 
 
-def bed(rest, orig, osr, out, db, gap=3.0, ramp=1.0):
+def insert_gain(film, voice, talk, db, most=-15.0):
+    """Gain for the music and road inserts so they sit against the dub's talk as the original's inserts
+    sat against its talk. The synthetic voice is quieter than the original voice with its road noise,
+    and the loudness pass then lifted the inserts at full level over it: Yaris inserts were 4.9 dB under
+    the talk in the original, 1.3 dB (English) and 3.6 dB (Polish) over it in the dubs."""
+    x, sr = sf.read(film, dtype="float32")
+    x = x.mean(1) if x.ndim > 1 else x
+
+    def energy(y, r):
+        h = r // 10
+        n = min(len(y) // h, len(talk))
+        return (y[:n * h].reshape(-1, h) ** 2).mean(1)
+    eo, ev = energy(x, sr), energy(voice, SR)
+    n = min(len(eo), len(ev))
+    t = talk[:n]
+    orig_talk = eo[:n][t].mean()
+    dub_talk = ev[:n][t].mean() + 10 ** (db / 10) * orig_talk
+    g = 10 * np.log10(dub_talk / orig_talk)
+    print("inserts %+.1f dB (dub talk vs original talk)" % max(g, most), flush=True)
+    return float(10 ** (min(0.0, max(g, most)) / 20))
+
+
+def bed(rest, orig, osr, out, db, full=1.0, gap=3.0, ramp=1.0):
     """The bed under the dub (the original track, or its sound without the voice), steady and `db`
-    quieter wherever the original voice talks (pauses under `gap` s count as talk), at full level in
-    music and road inserts, `ramp` s fades between. Ducking under each dubbed line made the left-over
-    noise swell in every pause between lines; the user preferred the original voice kept, quietly."""
+    quieter wherever the original voice talks (pauses under `gap` s count as talk), at `full` (linear
+    gain) in music and road inserts, `ramp` s fades between. Ducking under each dubbed line made the
+    left-over noise swell in every pause between lines; the user preferred the original voice kept, quietly."""
     x, sr = sf.read(rest, dtype="float32")
     hop = osr // 10
-    g = np.where(talk_mask(orig, osr, gap), 10 ** (db / 20), 1.0)
+    g = np.where(talk_mask(orig, osr, gap), 10 ** (db / 20), full)
     k = int(ramp * 10)
     g = np.convolve(np.concatenate([np.full(k, g[0]), g, np.full(k, g[-1])]), np.ones(k) / k, "same")[k:-k]
     g = np.interp(np.arange(len(x)) * (osr / sr) / hop, np.arange(len(g)), g).astype(np.float32)
@@ -399,6 +421,10 @@ def place(man, lens, slow=1.0, lead=3.0, pause=0.35, gap=1.5, fastest=1.3, catch
             for j, i in enumerate(g):
                 if j == 0:
                     at = max(t + 0.15, man[i]["start"])
+                elif not man[g[j - 1]]["text"].rstrip("»\"' ").endswith((".", "?", "!", "...", ":")):
+                    # the rest of a sentence split at a comma (sentences() breaks long ones): straight on,
+                    # whatever the lead. Held to `lead`, it stopped 2 s mid-sentence (Mercedes PL, 4:21)
+                    at = t + squeeze * 0.25
                 else:
                     p = squeeze * min(0.8, pause + 0.5 * max(0.0, man[i]["start"] - man[g[j - 1]]["end"]))
                     at = max(t + p, man[i]["start"] - lead)
@@ -483,7 +509,8 @@ def mix(a):
         print("   %2d:%04.1f  %s  %s" % (s // 60, s % 60, fl, text[:60]))
     sf.write(os.path.join(a.out, "voice.wav"), voice[:int(dur * SR)], SR)
     rest = tmp + "_film.wav" if a.bed == "original" else os.path.join(stems, "no_vocals.wav")
-    bed(rest, orig, osr, tmp + "_bed.wav", a.bed_db if a.bed_db is not None else BED_DB[a.bed])
+    db = a.bed_db if a.bed_db is not None else BED_DB[a.bed]
+    bed(rest, orig, osr, tmp + "_bed.wav", db, insert_gain(tmp + "_film.wav", voice[:int(dur * SR)], talk, db))
     graph = ("[0:a]aresample=48000[b];[1:a]aresample=48000," + HUM_FILTER + ",pan=stereo|c0=c0|c1=c0[v];"
              "[b][v]amix=inputs=2:normalize=0")
     mixed = [cfg.FFMPEG, "-hide_banner", "-i", tmp + "_bed.wav", "-i", os.path.join(a.out, "voice.wav"), "-filter_complex"]
