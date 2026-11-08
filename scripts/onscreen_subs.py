@@ -15,7 +15,8 @@ Texts come from the EDL (card, clip, end: items 5 and 6; photo: 4 and 5) and fro
 onscreen() in project.py returning [(clip, from_s, to_s, [lines])] for captions burnt into a clip at
 its own seconds (burn_in.py captions, captions baked into voice-over clips); they are mapped through
 every cut of that clip in film/<FILM_NAME>.mlt. Translations: <project>/subs/onscreen.json,
-{"<text>": {"en": "...", "pl": "..."}}, one entry per line of text. dub.py reads its manifest, not
+{"<text>": {"en": "...", "pl": "..."}}, one entry per line of text ("" drops a line, e.g. the
+Polish line of a bilingual caption). dub.py reads its manifest, not
 these files, so the cues are never spoken.
 """
 import importlib.util
@@ -100,7 +101,7 @@ def main():
             shutil.copy(path, keep)
         cues = parse(keep)
         for s, e, lines, sp in items:
-            t = [tr[x][lang] for x in lines]
+            t = [tr[x][lang] for x in lines if tr[x][lang]]     # "" drops a line already in that language
             cues.append((s, e, "[%s]" % " - ".join(t) if sp else "\n".join(t)))
         cues.sort(key=lambda c: c[0])
         with open(path, "w", encoding="utf-8") as f:
