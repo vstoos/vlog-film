@@ -112,7 +112,7 @@ renders. When they say to build, rebuild once, verify every changed spot as in s
 ### 6. Deliverables
 
 references/youtube.md: description with chapters (`timeline.py`), thumbnail (`make_thumb.py`),
-subtitles (`make_subs.py` on the finished film, hand-corrected, then translated cue by cue), YouTube
+subtitles (`make_subs.py` on the finished film, hand-corrected, then translated cue by cue, plus the on-screen texts translated as their own cues with `onscreen_subs.py`), YouTube
 auto-dubbing. The user can watch renders on a phone through `python $K/media_server.py --port 8765
 <footage> <project>/film` (LAN / VPN only; read-only; also at github.com/vstoos/media-server).
 

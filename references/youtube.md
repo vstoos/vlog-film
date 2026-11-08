@@ -40,7 +40,18 @@ bottom free for the end-screen tiles the user adds in YouTube Studio.
    words WhisperX misheard; compare doubtful places with the audio.
 3. Translate cue by cue into `.pl.srt` and `.en.srt` keeping the exact cue numbers and times;
    keep units and numbers, translate meaning not words, keep lines short.
-4. Upload in YouTube Studio > Subtitles. Also add the title and description in Polish and English
+4. **On-screen texts.** Cards, the title, the end card and captions stay in the film's language, and
+   under a card there is no voice, so a dubbed or foreign viewer gets nothing (the user's note on the
+   Mercedes film). After the speech subtitles and after every rebuild:
+   `python onscreen_subs.py <project.py> list` prints each text with its film time and the ones with no
+   translation; write them into `<project>/subs/onscreen.json` (`{"<text>": {"en": ..., "pl": ...}}`,
+   one entry per line of text), then `python onscreen_subs.py <project.py> write <footage>/<Name> en pl`.
+   Captions burnt into a clip (burn_in.py, voice-over clips) come from `onscreen()` in project.py,
+   `[(clip, from_s, to_s, [lines])]` at the clip's own seconds; the script maps them through every cut.
+   Over speech they are cues of their own in [brackets], overlapping the speech cue; the speech-only files
+   are kept as `subs/<Name>.<lang>.speech.srt` and are what a rerun starts from. The dub is not affected:
+   dub.py speaks its manifest, not these files. Check a few cue edges against frames of the film.
+5. Upload in YouTube Studio > Subtitles. Also add the title and description in Polish and English
    there (Studio > Languages), so foreign viewers see them in their language.
 
 ## Auto-dubbing
