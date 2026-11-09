@@ -9,7 +9,8 @@ talk ranges, maybe one insert, no title card and no end card), then:
 spec: {"src": "<landscape HLG mp4>", "out": "<short mp4>", "lang": "uk",
        "hook": "LG після 192 000 км", "hook_len": 4.0,            # top line for the first seconds (0 = whole Short)
        "pictures": [[t, length, "<png/jpg/HEIC or clip>"], ...],   # upper part of the frame, Short's own seconds
-       "frame": [[from, to, "face" | "fit" | "center" | x], ...]}   # overrides the automatic framing
+       "frame": [[from, to, "face" | "fit" | "center" | x], ...],   # overrides the automatic framing
+       "music": ["<file in music_dir or a path>", offset_s], "music_lufs": -28}   # quiet bed under the voice
 Framing: every shot (scene cut) is cropped 608x1080 around the median face centre and scaled up; a shot
 with no face (road, screen, photo) is shown whole, 1080 wide, over a blurred fill ("fit"). x is the
 crop's left edge in the 1920 frame.
@@ -33,6 +34,7 @@ WHITE = "0xBFBFBF"          # HLG reference white (~203 nits); full white glares
 YELLOW = "0xBFA000"
 CAP_Y = 1380                # caption centre line: above the Shorts UI (title, buttons) at the bottom
 PIC_TOP, PIC_W, PIC_H = 420, 1000, 720   # pictures: a box under the hook line and over the captions
+MUSIC_LUFS = -28.0          # music bed: 14 LU under the voice (-14); -34 was lost under the cabin noise
 
 
 def duration(f):
@@ -213,10 +215,19 @@ def main():
                         "bordercolor=black:x=(w-text_w)/2:y=%d:enable='lt(t,%s)'"
                         % (fb, text_file(tmp, "hook%d" % j, line), YELLOW, 200 + 100 * j, n))
     g.append("[%s]%s,format=yuv420p10le[vout]" % (last, ",".join(draw) if draw else "null"))
+    amap = "0:a"
+    if spec.get("music"):
+        fname, off = spec["music"]
+        mp = fname if os.path.isabs(fname) else os.path.join(vf.MUSIC_DIR, fname)
+        inputs += ["-ss", str(off), "-t", "%.2f" % (dur + 1), "-i", mp]
+        g.append("[%d:a]loudnorm=I=%s:TP=-6:LRA=11,aresample=48000,afade=t=in:d=1,afade=t=out:st=%.2f:d=2.5,"
+                 "atrim=0:%.3f[mus]" % (len(pics) + 1, spec.get("music_lufs", MUSIC_LUFS), dur - 2.5, dur))
+        g.append("[0:a]aresample=48000[voc];[voc][mus]amix=inputs=2:duration=first:normalize=0[aout]")
+        amap = "[aout]"
     script = os.path.join(tmp, "filter.txt")
     open(script, "w", encoding="utf-8").write(";\n".join(g))
     subprocess.run([vf.FFMPEG, "-v", "error", "-y"] + inputs + ["-filter_complex_script", script, "-map", "[vout]",
-                    "-map", "0:a", "-c:a", "aac", "-b:a", "256k"] + vf.hevc_args() + burn_in.HLG_TAGS +
+                    "-map", amap, "-c:a", "aac", "-b:a", "256k"] + vf.hevc_args() + burn_in.HLG_TAGS +
                    ["-tag:v", "hvc1", "-movflags", "+faststart", out], check=True)
     d = duration(out)
     print("done: %s  %.1f s%s" % (out, d, "  (over 60 s: fine for a Short up to 3 min, but 30-60 s work best)" if d > 60 else ""))

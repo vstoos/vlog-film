@@ -142,7 +142,7 @@ python $K/make_short.py <project>/shorts/s1/short.json     # -> <footage>/shorts
 
 `make_short.py` crops a 608-px window around the face of each shot (a new shot at a scene change or a
 face jump), shows a shot without a face whole over a blurred fill, puts pictures (the screenshot the talk
-mentions) in a box under the hook line, and burns word-timed captions. The first run writes
+mentions) in a box under the hook line, and burns word-timed captions; `"music": [file, offset]` lays a quiet bed under the voice (14 LU down, fades in and out). The first run writes
 `short.words.json` next to the spec: fix names and numbers there and run again. Look at frames of every
 shot before sending it. Plan the batch in the project's shorts_plan.md: which long video each one points to.
 
