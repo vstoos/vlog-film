@@ -155,6 +155,7 @@ Choosing and cutting (Helm batch, 2026-11-09):
 - Skip clips filmed on the car screen with the navigation map near home (privacy), even for one line.
 - In `short.words.json` fix brand names (WhisperX: "Pizarro" = P Zero) and add units the viewer needs
   ("4 700" -> "4 700 PLN").
+- Hook lines up to about 22 characters: longer ones run off the 1080 width.
 - A different track per Short (`music`), so a batch does not sound the same.
 - Listen to the end: a range ending on a number can lose it ("4 700" became "4 тисячі"). End the range
   just before the next word, and cut a silent tail with `"until"`.
