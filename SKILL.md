@@ -1,6 +1,6 @@
 ---
 name: vlog-film
-description: Edit raw trip / car vlog footage (phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail, subtitles in several languages and dubbed audio tracks in the user's cloned voice. Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail, subtitles and dubbing ("озвуч англійською моїм голосом", "dub this into Polish", "there is a pop at 4:25 in the dub"), even when the user does not say "skill" or "montage".
+description: Edit raw trip / car vlog footage (phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail, subtitles in several languages, dubbed audio tracks in the user's cloned voice and vertical Shorts. Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail, subtitles and dubbing ("озвуч англійською моїм голосом", "dub this into Polish", "there is a pop at 4:25 in the dub"), even when the user does not say "skill" or "montage".
 ---
 
 # Vlog film
@@ -127,6 +127,24 @@ For a language the user wants heard, not read: `references/dubbing.md`. The voic
 failed, and `dub.py mix` builds the track and prints what to listen to. Fix pronunciation in `say.json`.
 Voice-over for silent footage (dash-cam clips) takes the same route in Ukrainian, written as subtitles.
 Do not call a dub clean from the checks alone: the user's ear is the last step.
+
+### 8. Shorts
+
+A Short is a 9:16 cut of one strong passage (30-60 s), pointing to its long video. Build it as a small
+landscape film first, then reframe it:
+
+```
+<project>/shorts/s1/project.py   talk ranges only (CLIP_SRC to the film's landscape/_over copies), no card, no end
+python $K/filmkit.py <project>/shorts/s1/project.py
+python $K/render_final.py <project>/shorts/s1/film s1 <project>/shorts/s1/s1_land.mp4
+python $K/make_short.py <project>/shorts/s1/short.json     # -> <footage>/shorts/<name>.mp4, 1080x1920 HLG
+```
+
+`make_short.py` crops a 608-px window around the face of each shot (a new shot at a scene change or a
+face jump), shows a shot without a face whole over a blurred fill, puts pictures (the screenshot the talk
+mentions) in a box under the hook line, and burns word-timed captions. The first run writes
+`short.words.json` next to the spec: fix names and numbers there and run again. Look at frames of every
+shot before sending it. Plan the batch in the project's shorts_plan.md: which long video each one points to.
 
 ## Privacy
 
