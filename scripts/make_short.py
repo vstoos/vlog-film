@@ -12,6 +12,7 @@ spec: {"src": "<landscape HLG mp4>", "out": "<short mp4>", "lang": "uk",
                    # full (default): covers the whole frame, face included; box: under the hook line
        "frame": [[from, to, "face" | "fit" | "center" | x], ...],   # overrides the automatic framing
        "music": ["<file in music_dir or a path>", offset_s], "music_lufs": -28,   # quiet bed under the voice
+       "notes": [[t, length, "line\nline"], ...],   # smaller white text under the hook (a fact the talk leaves out)
        "until": 51.6}       # end the Short here (a silent tail the landscape cut kept)
 Framing: every shot (scene cut) is cropped 608x1080 around the median face centre and scaled up; a shot
 with no face (road, screen, photo) is shown whole, 1080 wide, over a blurred fill ("fit"). x is the
@@ -230,6 +231,12 @@ def main():
             draw.append("drawtext=fontfile='%s':textfile='%s':expansion=none:fontsize=78:fontcolor=%s:borderw=7:"
                         "bordercolor=black:x=(w-text_w)/2:y=%d:enable='lt(t,%s)'"
                         % (fb, text_file(tmp, "hook%d" % j, line), YELLOW, 200 + 100 * j, n))
+    note_y = 200 + 100 * len(spec.get("hook", "").split("\n")) + 30 if spec.get("hook") else 200
+    for k, (t0, n, text) in enumerate(spec.get("notes", [])):
+        for j, line in enumerate(text.split("\n")):
+            draw.append("drawtext=fontfile='%s':textfile='%s':expansion=none:fontsize=60:fontcolor=%s:borderw=6:"
+                        "bordercolor=black:x=(w-text_w)/2:y=%d:enable='between(t,%s,%s)'"
+                        % (fb, text_file(tmp, "note%d_%d" % (k, j), line), WHITE, note_y + 76 * j, t0, t0 + n))
     g.append("[%s]%s,format=yuv420p10le[vout]" % (last, ",".join(draw) if draw else "null"))
     amap = "0:a"
     if spec.get("music"):

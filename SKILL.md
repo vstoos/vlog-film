@@ -156,7 +156,9 @@ Choosing and cutting (Helm batch, 2026-11-09):
 - In `short.words.json` fix brand names (WhisperX: "Pizarro" = P Zero) and add units the viewer needs
   ("4 700" -> "4 700 PLN").
 - Hook lines up to about 22 characters: longer ones run off the 1080 width.
-- A different track per Short (`music`), so a batch does not sound the same.
+- A different track per Short (`music`), so a batch does not sound the same; a melodic guitar track goes lower (`"music_lufs": -33`), it competes with the voice.
+- A fact the talk leaves out ("the glass has since been replaced") goes in `"notes"`: small white lines under the hook.
+- A word missing from the clip transcript is cut as a pause by filmkit ("саме сколи, дрібні"): when the user hears a word gone, transcribe the source window and add the word to `transcripts/<clip>.json`.
 - Listen to the end: a range ending on a number can lose it ("4 700" became "4 тисячі"). End the range
   just before the next word, and cut a silent tail with `"until"`.
 - Phone copy for the user: tone-map to SDR h264 (libplacebo bt.2390) and keep it under the messenger limit.
