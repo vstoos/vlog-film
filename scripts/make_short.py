@@ -1,5 +1,5 @@
 """Turn a landscape HLG render into a YouTube Short: 1080x1920 HLG, reframed around the speaker's face,
-big burnt-in captions word by word, a hook line at the top, pictures in the upper part.
+big burnt-in captions word by word, a hook line at the top, pictures over the whole frame.
 
 Build the Short as a small landscape film first (filmkit.py + render_final.py with its own project:
 talk ranges, maybe one insert, no title card and no end card), then:
@@ -8,7 +8,8 @@ talk ranges, maybe one insert, no title card and no end card), then:
 
 spec: {"src": "<landscape HLG mp4>", "out": "<short mp4>", "lang": "uk",
        "hook": "LG після 192 000 км", "hook_len": 4.0,            # top line for the first seconds (0 = whole Short)
-       "pictures": [[t, length, "<png/jpg/HEIC or clip>"], ...],   # upper part of the frame, Short's own seconds
+       "pictures": [[t, length, "<png/jpg/HEIC or clip>", "full" | "box"], ...],   # Short's own seconds;
+                   # full (default): covers the whole frame, face included; box: under the hook line
        "frame": [[from, to, "face" | "fit" | "center" | x], ...],   # overrides the automatic framing
        "music": ["<file in music_dir or a path>", offset_s], "music_lufs": -28,   # quiet bed under the voice
        "until": 51.6}       # end the Short here (a silent tail the landscape cut kept)
@@ -189,18 +190,32 @@ def main():
               "[bg][fg]overlay=x=0:y=(H-h)/2[fit]",
               "[face][fit]overlay=x=0:y=0:enable='%s'[v0]" % "+".join("between(t,%.3f,%.3f)" % f for f in fits)]
         last = "v0"
-    fit_box = "scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos,setsar=1" % (PIC_W, PIC_H)
-    for k, (t0, n, pic) in enumerate(pics, 1):
+    for k, p in enumerate(pics, 1):
+        t0, n, pic = p[:3]
+        full = (p[3] if len(p) > 3 else "full") == "full"
+        bw, bh = (W, H) if full else (PIC_W, PIC_H)
+        fit_box = "scale=%d:%d:force_original_aspect_ratio=decrease:flags=lanczos,setsar=1" % (bw, bh)
         if burn_in.is_image(pic):
             inputs += ["-loop", "1", "-framerate", "30", "-t", str(n), "-i", pic]
-            pre = "%s,%s" % (fit_box, burn_in.SDR_TO_HLG)
+            hlg = "," + burn_in.SDR_TO_HLG.rstrip(",")
         else:
             inputs += ["-t", str(n), "-i", pic]
-            pre = fit_box + ","
-        g.append("[%d:v]%sformat=yuva444p10le,fade=t=in:st=0:d=0.25:alpha=1,fade=t=out:st=%s:d=0.25:alpha=1,"
-                 "setpts=PTS-STARTPTS+%s/TB[p%d]" % (k, pre, n - 0.25, t0, k))
-        g.append("[%s][p%d]overlay=x=(W-w)/2:y=%d+(%d-h)/2:format=yuv444p10:eof_action=pass:enable='between(t,%s,%s)'[v%d]"
-                 % (last, k, PIC_TOP, PIC_H, t0, t0 + n, k))
+            hlg = ""
+        if full:
+            # the whole frame: the picture 1080 wide over a blurred, darkened fill of itself, so it hides the face
+            g.append("[%d:v]setsar=1%s,format=yuv444p10le,split[pb%d][pf%d]" % (k, hlg, k, k))
+            g.append("[pb%d]scale=%d:%d:force_original_aspect_ratio=increase,crop=%d:%d,gblur=sigma=40,"
+                     "colorlevels=romax=0.55:gomax=0.55:bomax=0.55[pbb%d]" % (k, W, H, W, H, k))
+            g.append("[pf%d]%s[pff%d]" % (k, fit_box, k))
+            g.append("[pbb%d][pff%d]overlay=x=(W-w)/2:y=(H-h)/2,format=yuva444p10le,fade=t=in:st=0:d=0.25:alpha=1,"
+                     "fade=t=out:st=%s:d=0.25:alpha=1,setpts=PTS-STARTPTS+%s/TB[p%d]" % (k, k, n - 0.25, t0, k))
+            pos = "x=0:y=0"
+        else:
+            g.append("[%d:v]%s%s,format=yuva444p10le,fade=t=in:st=0:d=0.25:alpha=1,fade=t=out:st=%s:d=0.25:alpha=1,"
+                     "setpts=PTS-STARTPTS+%s/TB[p%d]" % (k, fit_box, hlg, n - 0.25, t0, k))
+            pos = "x=(W-w)/2:y=%d+(%d-h)/2" % (PIC_TOP, PIC_H)
+        g.append("[%s][p%d]overlay=%s:format=yuv444p10:eof_action=pass:enable='between(t,%s,%s)'[v%d]"
+                 % (last, k, pos, t0, t0 + n, k))
         last = "v%d" % k
     fb = vf.ff_font(vf.FONT_BOLD)
     draw = []
