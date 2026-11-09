@@ -146,6 +146,18 @@ mentions) in a box under the hook line, and burns word-timed captions; `"music":
 `short.words.json` next to the spec: fix names and numbers there and run again. Look at frames of every
 shot before sending it. Plan the batch in the project's shorts_plan.md: which long video each one points to.
 
+Choosing and cutting (Helm batch, 2026-11-09):
+- One complete thought, 30-60 s; ranges from word timings (`transcripts/<clip>.json`, words `w/s/e`),
+  not segment ends. A hook (2 short lines, `hook_len: 0` keeps it on) says what the Short is about, so
+  the talk can start mid-story. Skip false starts and repeats with several ranges of one clip.
+- CLIP_SRC to the film's upright copies *without* burnt-in captions (`_land`): a 608-px crop cuts a
+  landscape caption in half. Show a still the talk mentions as a `pictures` entry instead.
+- Skip clips filmed on the car screen with the navigation map near home (privacy), even for one line.
+- In `short.words.json` fix brand names (WhisperX: "Pizarro" = P Zero) and add units the viewer needs
+  ("4 700" -> "4 700 PLN").
+- A different track per Short (`music`), so a batch does not sound the same.
+- Phone copy for the user: tone-map to SDR h264 (libplacebo bt.2390) and keep it under the messenger limit.
+
 ## Privacy
 
 Plates: the user does not blur ordinary traffic (Poland; the floating box spoils road shots).
