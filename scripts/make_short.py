@@ -10,7 +10,8 @@ spec: {"src": "<landscape HLG mp4>", "out": "<short mp4>", "lang": "uk",
        "hook": "LG після 192 000 км", "hook_len": 4.0,            # top line for the first seconds (0 = whole Short)
        "pictures": [[t, length, "<png/jpg/HEIC or clip>"], ...],   # upper part of the frame, Short's own seconds
        "frame": [[from, to, "face" | "fit" | "center" | x], ...],   # overrides the automatic framing
-       "music": ["<file in music_dir or a path>", offset_s], "music_lufs": -28}   # quiet bed under the voice
+       "music": ["<file in music_dir or a path>", offset_s], "music_lufs": -28,   # quiet bed under the voice
+       "until": 51.6}       # end the Short here (a silent tail the landscape cut kept)
 Framing: every shot (scene cut) is cropped 608x1080 around the median face centre and scaled up; a shot
 with no face (road, screen, photo) is shown whole, 1080 wide, over a blurred fill ("fit"). x is the
 crop's left edge in the 1920 frame.
@@ -168,7 +169,7 @@ def text_file(folder, name, text):
 def main():
     spec = json.load(open(sys.argv[1], encoding="utf-8"))
     src, out = spec["src"], spec["out"]
-    dur = duration(src)
+    dur = min(duration(src), spec.get("until") or 1e9)
     work = os.path.splitext(os.path.abspath(sys.argv[1]))[0]        # next to the spec: <spec>.words.json, <spec>_parts/
     tmp = work + "_parts"
     os.makedirs(tmp, exist_ok=True)
@@ -176,7 +177,7 @@ def main():
     fits = [(a, z) for a, z, v in shots if v == "fit"]
     crop_x = "+".join("gte(t,%.3f)*lt(t,%.3f)*%d" % (a, z, v) for a, z, v in shots if v != "fit") or "656"
     pics = spec.get("pictures", [])
-    inputs = ["-i", src]
+    inputs = ["-t", "%.3f" % dur, "-i", src]
     # face: a 608-wide window, scaled to the full height; fit: the whole frame 1080 wide over a blurred,
     # darkened fill of itself, laid over the face picture during the shots without a face
     g = ["[0:v]format=yuv444p10le%s" % (",split=3[s0][s1][s2]" if fits else "[s0]"),

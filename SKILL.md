@@ -156,6 +156,8 @@ Choosing and cutting (Helm batch, 2026-11-09):
 - In `short.words.json` fix brand names (WhisperX: "Pizarro" = P Zero) and add units the viewer needs
   ("4 700" -> "4 700 PLN").
 - A different track per Short (`music`), so a batch does not sound the same.
+- Listen to the end: a range ending on a number can lose it ("4 700" became "4 тисячі"). End the range
+  just before the next word, and cut a silent tail with `"until"`.
 - Phone copy for the user: tone-map to SDR h264 (libplacebo bt.2390) and keep it under the messenger limit.
 
 ## Privacy
