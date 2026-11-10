@@ -285,7 +285,14 @@ def load(f):
         x = x.mean(1)
     stop = len(x) - int(TAIL * sr)
     if CHECKS.get(f, {}).get("end"):
-        stop = min(stop, int((CHECKS[f]["end"] + 0.15) * sr))
+        # the aligned end of the last word can be 0.3-0.5 s early: cut there, "speed" and "stations" lost
+        # their ends (S4/S5 EN, 10.11.2026). The cut waits for 100 ms under -30 dB of the take's peak, at most
+        # 0.45 s: further on it is the model running on (S7 EN 001_0: 2.3 s more of a voice after the last word)
+        cut, hop = int((CHECKS[f]["end"] + 0.15) * sr), sr // 50
+        quiet, most = np.abs(x).max() * 10 ** (-30 / 20), cut + int(0.45 * sr)
+        while cut + 5 * hop < stop and cut < most and np.abs(x[cut:cut + 5 * hop]).max() > quiet:
+            cut += hop
+        stop = min(stop, cut)
     x = x[:max(stop, sr // 10)]
     from scipy.signal import butter, sosfiltfilt
     x = sosfiltfilt(butter(2, 60, "highpass", fs=sr, output="sos"), x).astype(np.float32)   # DC and rumble, before any fade
