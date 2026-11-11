@@ -9,3 +9,5 @@ pillow-heif>=0.18
 numpy>=2.0
 soundfile>=0.13      # dub_check.py
 num2words>=0.5.14   # dub_check.py
+google-api-python-client>=2.150   # yt_upload.py
+google-auth-oauthlib>=1.2         # yt_upload.py

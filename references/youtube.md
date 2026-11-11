@@ -51,8 +51,42 @@ bottom free for the end-screen tiles the user adds in YouTube Studio.
    Over speech they are cues of their own in [brackets], overlapping the speech cue; the speech-only files
    are kept as `subs/<Name>.<lang>.speech.srt` and are what a rerun starts from. The dub is not affected:
    dub.py speaks its manifest, not these files. Check a few cue edges against frames of the film.
-5. Upload in YouTube Studio > Subtitles. Also add the title and description in Polish and English
-   there (Studio > Languages), so foreign viewers see them in their language.
+5. Upload them with `yt_upload.py` (next section), together with the translated titles and
+   descriptions, so foreign viewers see the video in their language.
+
+## Upload (scripts/yt_upload.py)
+
+YouTube Data API v3 through the user's own Google Cloud project (set up 2026-11-11). Free: uploads
+have their own bucket of 100 a day; captions cost 400 and thumbnails 50 of the 10 000 daily units.
+
+- Login per channel: `--channel main` (default, VS EV studies, UC2P3WgLXv9c6D2aOdd1KwhQ); other
+  channels get their own name (`pl`, `ua`) the first time the user wants them:
+  `python yt_upload.py auth --channel pl` opens the browser, the user picks the channel, the script
+  prints the real channel name. Google's account picker shows old brand-account names, so always
+  check that printed name. The app is in Testing mode: Google asks to log in again about every 7 days;
+  the script reopens the browser by itself.
+- Secrets stay in `%USERPROFILE%\.youtube\` (client_secret.json, token_<channel>.json), never in the
+  repo, the footage folder or chat.
+- **The script never deletes.** The OAuth scope needed for captions (youtube.force-ssl) would allow
+  deleting; the `NoDelete` wrapper refuses every delete method. Keep it that way: the user asked.
+- Always `--dry-run` first: it checks every file and prints what would go up, without touching YouTube.
+- Upload as private (default) or `--publish-at`; the user makes it public after a look in Studio.
+  Videos from an unaudited API project may stay locked private until Google's audit; publishing in
+  Studio by hand still works.
+
+```
+python yt_upload.py upload <footage>/<Name>_HLG.mp4 --title "..." --desc <footage>/YouTube_description.txt \
+    --thumb <footage>/thumbnail.jpg --lang uk --tags "Toyota,Yaris,..." \
+    --sub uk=<Name>.uk.srt --sub pl=<Name>.pl.srt --sub en=<Name>.en.srt \
+    --loc pl="Tytul|desc.pl.txt" --loc en="Title|desc.en.txt" --dry-run
+python yt_upload.py captions <VIDEO_ID> --sub pl=<Name>.pl.srt     # add later / another language
+python yt_upload.py thumb <VIDEO_ID> thumb2.jpg
+python yt_upload.py loc <VIDEO_ID> --loc en="Title|desc.en.txt"
+```
+
+The upload writes `<video>.youtube.json` with the video id next to the mp4. Not possible through
+the API: own dubbed audio tracks and end-screen tiles; tell the user to add them in Studio
+(Languages > Add audio track; End screen).
 
 ## Auto-dubbing
 

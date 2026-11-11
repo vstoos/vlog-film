@@ -1,6 +1,6 @@
 ---
 name: vlog-film
-description: Edit raw trip / car vlog footage (phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail, subtitles in several languages, dubbed audio tracks in the user's cloned voice and vertical Shorts. Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail, subtitles and dubbing ("озвуч англійською моїм голосом", "dub this into Polish", "there is a pop at 4:25 in the dub"), even when the user does not say "skill" or "montage".
+description: Edit raw trip / car vlog footage (phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail, subtitles in several languages, dubbed audio tracks in the user's cloned voice, vertical Shorts, and the upload to the YouTube channel (video, thumbnail, subtitles, translated titles; "завантаж на ютуб", "upload the subtitles"). Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail, subtitles and dubbing ("озвуч англійською моїм голосом", "dub this into Polish", "there is a pop at 4:25 in the dub"), even when the user does not say "skill" or "montage".
 ---
 
 # Vlog film
@@ -115,7 +115,8 @@ renders. When they say to build, rebuild once, verify every changed spot as in s
 
 references/youtube.md: description with chapters (`timeline.py`), thumbnail (`make_thumb.py`),
 subtitles (`make_subs.py` on the finished film, hand-corrected, then translated cue by cue, plus the on-screen texts translated as their own cues with `onscreen_subs.py`), YouTube
-auto-dubbing. The user can watch renders on a phone through `python $K/media_server.py --port 8765
+auto-dubbing, and the upload itself: `yt_upload.py` puts the video, thumbnail, subtitles and translated
+titles on the channel (private, never deletes anything; `--dry-run` first). The user can watch renders on a phone through `python $K/media_server.py --port 8765
 <footage> <project>/film` (LAN / VPN only; read-only; also at github.com/vstoos/media-server).
 
 ### 7. Dubbed audio tracks
