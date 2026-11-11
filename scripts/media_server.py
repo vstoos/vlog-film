@@ -1,4 +1,6 @@
 """Read-only home video server: browse folders of videos and play them in the browser, HDR included.
+Audio files (mp3, m4a, wav, flac, ogg, opus, aac) are listed and play too; subtitles and text
+(srt, vtt, txt) open as a page to read, with a download link.
 
 usage: python media_server.py [--port 8765] [--bind 0.0.0.0] [--lang uk|en] [folder ...]
   With no folders, serves the ones in config.json next to this file, or else ~/Videos.
@@ -26,14 +28,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 OPTS = {}   # per root: "only" = regex a file name must match, "flat" = no subfolders
 VIDEO = {".mp4": "video/mp4", ".m4v": "video/mp4", ".mov": "video/quicktime", ".webm": "video/webm",
          ".mkv": "video/x-matroska"}
+AUDIO = {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".wav": "audio/wav", ".flac": "audio/flac",
+         ".ogg": "audio/ogg", ".opus": "audio/ogg"}
+TEXTS = {".srt": "application/x-subrip", ".vtt": "text/vtt", ".txt": "text/plain"}
+MEDIA = {**VIDEO, **AUDIO, **TEXTS}
+TEXT_MAX = 2 << 20   # bigger text files are only offered for download
 CHUNK = 1 << 20
 TEXT = {
-    "uk": {"home": "Відео", "all": "Усі папки", "empty": "Тут немає відео.", "files": "відео",
+    "uk": {"home": "Відео", "all": "Усі папки", "empty": "Тут немає відео, аудіо чи субтитрів.", "files": "відео",
            "folders": "папок", "download": "Завантажити файл", "nf": "Не знайдено", "gb": "ГБ", "mb": "МБ",
-           "back": "Назад"},
-    "en": {"home": "Videos", "all": "All folders", "empty": "No videos here.", "files": "videos",
+           "back": "Назад", "big": "Файл завеликий для перегляду, завантажте його."},
+    "en": {"home": "Videos", "all": "All folders", "empty": "No videos, audio or subtitles here.", "files": "videos",
            "folders": "folders", "download": "Download", "nf": "Not found", "gb": "GB", "mb": "MB",
-           "back": "Back"},
+           "back": "Back", "big": "Too big to show here; download it."},
 }
 
 PAGE = """<!doctype html><html lang="{lang}"><head><meta charset="utf-8">
@@ -49,7 +56,11 @@ ul {{ list-style:none; padding:0; margin:0; }}
 li {{ background:var(--card); border:1px solid var(--line); border-radius:10px; margin:8px 0; }}
 li a {{ display:block; padding:12px 14px; overflow-wrap:anywhere; }} .meta {{ color:var(--mut); font-size:13px; }}
 li.dir a::before {{ content:"\\1F4C1  "; }}
-video {{ width:100%; max-height:80vh; background:#000; border-radius:8px; }}
+video {{ width:100%; max-height:80vh; background:#000; border-radius:8px; }} audio {{ width:100%; }}
+li.aud a::before {{ content:"\\266A  "; color:var(--mut); }}
+li.txt a::before {{ content:"\\1F4C4  "; }}
+pre {{ background:var(--card); border:1px solid var(--line); border-radius:8px; padding:12px 14px; white-space:pre-wrap;
+      overflow-wrap:anywhere; font:14px/1.5 ui-monospace,Consolas,monospace; }}
 .crumbs {{ color:var(--mut); font-size:14px; overflow-wrap:anywhere; }}
 </style></head><body><main>{body}</main></body></html>"""
 
@@ -134,7 +145,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.folder(root, rel, full)
         name = os.path.basename(full)
         only = OPTS.get(root[0], {}).get("only")
-        if mode in ("play", "file") and os.path.isfile(full) and os.path.splitext(full)[1].lower() in VIDEO \
+        if mode in ("play", "file") and os.path.isfile(full) and os.path.splitext(full)[1].lower() in MEDIA \
                 and self.visible(name) and not (only and not only.search(name)):
             return self.player(root, rel) if mode == "play" else self.send_file(full)
         return self.not_found()
@@ -161,7 +172,7 @@ class Handler(BaseHTTPRequestHandler):
             if e.is_dir():
                 if not opt.get("flat"):
                     dirs.append(e)
-            elif os.path.splitext(e.name)[1].lower() in VIDEO and not (opt.get("only") and not opt["only"].search(e.name)):
+            elif os.path.splitext(e.name)[1].lower() in MEDIA and not (opt.get("only") and not opt["only"].search(e.name)):
                 files.append(e)
         dirs.sort(key=lambda e: e.name.lower(), reverse=True)        # dated names: newest first
         files.sort(key=lambda e: -e.stat().st_mtime)
@@ -169,8 +180,10 @@ class Handler(BaseHTTPRequestHandler):
                 for d in dirs]
         for f in files:
             st = f.stat()
-            rows.append('<li><a href="%s">%s<div class="meta">%s · %s</div></a></li>'
-                        % (self.href(root[0], rel + [f.name], "play"), html.escape(f.name), self.human(st.st_size),
+            ext = os.path.splitext(f.name)[1].lower()
+            cls = ' class="aud"' if ext in AUDIO else ' class="txt"' if ext in TEXTS else ""
+            rows.append('<li%s><a href="%s">%s<div class="meta">%s · %s</div></a></li>'
+                        % (cls, self.href(root[0], rel + [f.name], "play"), html.escape(f.name), self.human(st.st_size),
                            datetime.fromtimestamp(st.st_mtime).strftime("%d.%m.%Y %H:%M")))
         crumbs = ['<a href="/">%s</a>' % self.t["all"], '<a href="/%s">%s</a>' % (root[0], html.escape(root[1]))]
         for i, p in enumerate(rel):
@@ -182,11 +195,33 @@ class Handler(BaseHTTPRequestHandler):
 
     def player(self, root, rel):
         src = self.href(root[0], rel, "file")
+        if os.path.splitext(rel[-1])[1].lower() in TEXTS:
+            return self.text_page(root, rel, src)
+        tag ="audio" if os.path.splitext(rel[-1])[1].lower() in AUDIO else "video"
         body = ('<p class="crumbs"><a href="%s">&larr; %s</a></p><h1>%s</h1>'
-                '<video controls playsinline preload="metadata" src="%s"></video>'
+                '<%s controls playsinline preload="metadata" src="%s"></%s>'
                 '<p class="meta"><a href="%s" download>%s</a></p>'
                 % (self.href(root[0], rel[:-1]), html.escape(rel[-2] if len(rel) > 1 else root[1]),
-                   html.escape(rel[-1]), src, src, self.t["download"]))
+                   html.escape(rel[-1]), tag, src, tag, src, self.t["download"]))
+        self.send_page(rel[-1], body)
+
+    def text_page(self, root, rel, src):
+        """Subtitles / text: the contents on the page, and a link that downloads the file."""
+        fpath = self.resolve(root[0], rel)[1]
+        if os.path.getsize(fpath) > TEXT_MAX:
+            shown = "<p>%s</p>" % self.t["big"]
+        else:
+            with open(fpath, "rb") as f:
+                raw = f.read()
+            try:
+                txt = raw.decode("utf-8-sig")
+            except UnicodeDecodeError:
+                txt = raw.decode("cp1251", errors="replace")     # old Windows text files
+            shown = "<pre>%s</pre>" % html.escape(txt)
+        body = ('<p class="crumbs"><a href="%s">&larr; %s</a></p><h1>%s</h1>'
+                '<p class="meta"><a href="%s?dl=1" download>%s</a></p>%s'
+                % (self.href(root[0], rel[:-1]), html.escape(rel[-2] if len(rel) > 1 else root[1]),
+                   html.escape(rel[-1]), src, self.t["download"], shown))
         self.send_page(rel[-1], body)
 
     def send_file(self, fpath):
@@ -208,7 +243,12 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Range", "bytes %d-%d/%d" % (start, end, size))
         else:
             self.send_response(200)
-        self.send_header("Content-Type", VIDEO.get(os.path.splitext(fpath)[1].lower(), "application/octet-stream"))
+        ext = os.path.splitext(fpath)[1].lower()
+        self.send_header("Content-Type", MEDIA.get(ext, "application/octet-stream") + ("; charset=utf-8" if ext in TEXTS else ""))
+        if ext in TEXTS and "dl=1" in urllib.parse.urlsplit(self.path).query:
+            # a real file save, also where the browser ignores the download attribute
+            self.send_header("Content-Disposition", "attachment; filename*=UTF-8''%s"
+                             % urllib.parse.quote(os.path.basename(fpath)))
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Length", str(end - start + 1))
         self.end_headers()

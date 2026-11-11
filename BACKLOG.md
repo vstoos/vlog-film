@@ -159,3 +159,42 @@
 - How found: the user heard "ponad..." with no "tysiąc kilometrów" at 7:04 of the Mercedes PL dub.
 - Fix for an old dub: references/dubbing.md (drop those checks.json entries, run dub_check.py, remix).
 - How bad: medium-high for published dubs; only listening finds it.
+
+## dub.py mix with a time window crashes in since()
+
+- What: `dub.py mix <film> <out> 240 275` fails with IndexError in since() (talk[i - 1], index 352 of 350):
+  the talk/insert arrays cover only the window, while place() asks about cues outside it.
+- Where: scripts/dub.py mix(), the since()/until() closures (around line 460).
+- How found: test mix of 4:00-4:35 of the Mercedes PL dub, 08.11.2026. Workaround: mix the whole film into a
+  copy of the out dir (manifest.json, checks.json, say.json).
+- How bad: low; a full mix takes about 5 min.
+
+## blur_plates.py takes a car's instrument display for a plate
+
+- What: on IMG_8024 (Mercedes GLC cabin at a rest area) it put a box over the middle of the instrument cluster
+  (the trip computer) for whole seconds, and smeared wide strips across panning shots (IMG_8028/8029).
+- Where: scripts/blur_plates.py detect() (CONF 0.15, HOLD 12).
+- How found: frames of the Mercedes film, 08.11.2026. Workaround: C:/Data/mercedes-video, film/IMG_8024_part.mov,
+  the blurred clip only in the seconds where the window shows the outside (overlay with enable=between()).
+- How bad: medium: blurs the very thing a car film shows; easy to miss without checking frames.
+
+## render_final.py puts a relative output path inside the film folder
+
+- What: `render_final.py <film> s1 s1_land.mp4` (the form SKILL.md section 8 shows) copies the result to
+  `<film>/s1_land.mp4`, not next to project.py, so make_short.py then fails with "could not convert string to
+  float: ''" (ffprobe on a missing file).
+- Where: scripts/render_final.py (the copy step), SKILL.md section 8 commands.
+- How found: Yaris Short S1, 09.11.2026. Workaround: pass an absolute path or move the file.
+- How bad: low; also the phone copy must stay under 30 MB to reach Remote Control (3.6 Mb/s h264 for ~55 s).
+
+## dub.py load() cut the end off a line's last word
+
+- What: load() cut every take at the checked end of the last word + 0.15 s, and WhisperX puts that end
+  0.3-0.5 s early on some words: "at low speed" (Helm S4 EN 0:36) and "petrol stations" (S5 EN) lost
+  their endings, with no flag.
+- Where: scripts/dub.py load().
+- How found: the user heard both on 10.11.2026; RMS of the takes showed speech 0.35 s past the cut.
+- Fixed 10.11.2026: the cut waits for 100 ms under -30 dB of the take's peak, at most 0.45 s more (a longer
+  run is the model running on). Older dubs: remix; `C:/Data/helm-video/shorts/tools/tail_gain.py <dub_dir>`
+  lists the lines the old cut chopped.
+- How bad: medium-high for published dubs; only listening finds it.
