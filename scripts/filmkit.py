@@ -36,6 +36,9 @@ MUSIC_LEAD, MUSIC_TAIL = 1.2, 1.5   # music rises under the last words, fades un
 VOICE_XFADE = 0.5      # voice fades out into / in from an insert over this much extra room tone
 VOICE_TARGET = -20.0   # LUFS each clip's used voice is brought to, per talk block (day-2 clips are ~10 dB down)
 VOICE_GAIN_MAX, VOICE_GAIN_MIN = 14.0, -6.0   # cap the boost, so the quietest clips do not pump up the hiss
+VOICE_HIGHPASS = 120.0    # Hz, low cut on every talk entry (24 dB/oct): road and wind rumble sits under it; 0 = off
+VOICE_MEASURE_HP = 200.0  # Hz, the voice level is measured above this, so a clip's rumble does not count as voice
+                          # (a loud rumble used to turn the clip down and bury the voice: Helm 2, 4:39)
 
 CLIP_FRAME, CLIP_SPEED, PORTRAIT_BAND = {}, {}, {}
 CLIP_SRC = {}   # clip -> landscape picture file used as is: no plate blur, no portrait handling (TeslaCam, burn_in output)
@@ -295,8 +298,9 @@ def voice_lufs(clip, ranges):
                           "-ar", str(sr), "-f", "s16le", "-"], capture_output=True, check=True).stdout
     x = np.frombuffer(raw, np.int16).reshape(-1, 2)
     joined = np.concatenate([x[int(lo * sr):int(hi * sr)] for lo, hi in ranges])
+    af = ("highpass=f=%g:p=2,highpass=f=%g:p=2," % (VOICE_MEASURE_HP, VOICE_MEASURE_HP) if VOICE_MEASURE_HP else "")
     err = subprocess.run([vf.FFMPEG, "-nostats", "-f", "s16le", "-ar", str(sr), "-ac", "2", "-i", "-",
-                          "-af", "ebur128", "-f", "null", "-"], input=joined.tobytes(),
+                          "-af", af + "ebur128", "-f", "null", "-"], input=joined.tobytes(),
                          capture_output=True).stderr.decode("utf-8", "replace")
     found = [l for l in err.splitlines() if l.strip().startswith("I:")]
     return float(found[-1].split()[1]) if found else None
@@ -398,8 +402,19 @@ def talk_entry(clip, fi, fo, fade_in_f, fade_out_f, gain_db=0.0):
     floor_in = -24
     floor_out = -30 if fade_out_f > 1 else -24
     level = "%s=%d;%s=0;%s=0;%s=%d" % (tc(0), floor_in, tc(fin), tc(n - 1 - fout), tc(n - 1), floor_out)
-    return ('    <entry producer="%s" in="%s" out="%s">\n' % (clip, i, o) + volume_filter(i, o, level) +
+    return ('    <entry producer="%s" in="%s" out="%s">\n' % (clip, i, o) + highpass_filter(i, o) +
+            volume_filter(i, o, level) +
             (volume_filter(i, o, "%.1f" % gain_db) if abs(gain_db) >= 0.1 else "") + '    </entry>')
+
+
+def highpass_filter(i, o):
+    """VOICE_HIGHPASS as two 2-pole high-pass stages (24 dB/oct)."""
+    if not VOICE_HIGHPASS:
+        return ""
+    one = ('      <filter in="%s" out="%s"><property name="mlt_service">avfilter.highpass</property>'
+           '<property name="av.f">%g</property><property name="av.p">2</property></filter>\n'
+           % (i, o, VOICE_HIGHPASS))
+    return one * 2
 
 
 def build(render_media=True):
