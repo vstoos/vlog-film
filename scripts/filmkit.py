@@ -71,7 +71,7 @@ def configure(path):
 
 # --- media -------------------------------------------------------------------
 def zoom_for(deg):
-    a = math.radians(deg)
+    a = math.radians(abs(deg))   # a negative roll needs the same zoom
     return math.cos(a) + 16 / 9 * math.sin(a) + 0.002
 
 

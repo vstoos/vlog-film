@@ -64,6 +64,11 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
 ## Framing and inserts
 
 - Dash-cam horizon: measure roll per car with roll_lr.py; filmkit rotates and zooms just enough.
+- iPhone road clips on a windshield mount tilt differently in every clip (Helm 2: -2.5 to +2.4 deg), and the
+  user saw it. roll_lr.py on the used part only (cut it out first), then check the sign on a grid frame:
+  ffmpeg rotate = minus roll_lr (positive = clockwise). Render levelled copies (rotate + zoom_for, HLG) and
+  point CLIP_SRC and any burn_in b-roll at them; cards rotate through roll_for. zoom_for must use abs(deg),
+  or a negative angle zooms out and shows the black corners. roll_lr gives nan in tunnels and on handheld clips.
 - Portrait iPhone clips that are inserts can be cropped to the part that matters (CLIP_FRAME).
 - Long walk-arounds can be sped up (CLIP_SPEED) instead of cut.
 - A phone screenshot over the voice padded to the full frame hides the speaker for 5-8 s each, and the
