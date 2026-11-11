@@ -198,3 +198,12 @@
   run is the model running on). Older dubs: remix; `C:/Data/helm-video/shorts/tools/tail_gain.py <dub_dir>`
   lists the lines the old cut chopped.
 - How bad: medium-high for published dubs; only listening finds it.
+
+## render_final.py green-frame check counts green foliage
+- What: "green samples: 69 of 3390" on Helm 2 build 3, but every flagged frame was normal: trees behind the side
+  window, a green charger screen. The check (U+V average < 1000 on a 64x36 frame) cannot tell real green from
+  melt's garbled frames.
+- Where: scripts/render_final.py, the "green frames" block (around line 61).
+- How found: Helm 2 build 3, 11.11.2026; frames at 0:40, 1:27, 2:15, 2:35, 3:59, 8:38, 23:31 looked fine.
+- How bad: low, but a false alarm costs a frame check each render. Idea: flag only near-flat frames (low
+  U/V spread, signalstats UDIF/VDIF or YHIGH-YLOW) or long runs.
