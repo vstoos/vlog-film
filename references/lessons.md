@@ -38,6 +38,10 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   block to VOICE_TARGET by measuring only the pieces actually used (EBU R128 on the joined pieces;
   ffmpeg's aselect ignored its expression on these files, so the joining is done in numpy).
   Boost is capped at +14 dB so a very quiet clip does not turn into hiss.
+- Road and wind rumble (under ~150 Hz, a window open, a rough surface) makes a clip measure loud, so the levelling
+  turned it down and buried the voice (Helm 2, 4:39: -5.7 dB on a clip whose voice was quiet). filmkit now cuts
+  under VOICE_HIGHPASS (120 Hz, 24 dB/oct) on every talk entry and measures the voice above VOICE_MEASURE_HP
+  (200 Hz); such clips now get about +7 dB relative to before. A spectrogram (`showspectrumpic`, fscale=log) shows it.
 - The final render is loudness-normalised to -14 LUFS (two-pass loudnorm, linear). After levelling,
   neighbouring sections should be within 1-2 dB; check the ones the user complained about.
 - Music sits at -15 dB, rises under the last words before an insert and fades under the first
