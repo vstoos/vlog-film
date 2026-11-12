@@ -13,6 +13,8 @@ spec: {"src": "<landscape HLG mp4>", "out": "<short mp4>", "lang": "uk",
        "frame": [[from, to, "face" | "fit" | "center" | x], ...],   # overrides the automatic framing
        "music": ["<file in music_dir or a path>", offset_s], "music_lufs": -28,   # quiet bed under the voice
        "notes": [[t, length, "line\nline"], ...],   # smaller white text under the hook (a fact the talk leaves out)
+       "outro": "Вся поїздка:\nпосилання над назвою", "outro_len": 3.0,   # top line for the last seconds:
+                   # a reason to open the long video (the Related-video link shows above the title)
        "until": 51.6}       # end the Short here (a silent tail the landscape cut kept)
 Framing: every shot (scene cut) is cropped 608x1080 around the median face centre and scaled up; a shot
 with no face (road, screen, photo) is shown whole, 1080 wide, over a blurred fill ("fit"). x is the
@@ -226,11 +228,19 @@ def main():
                     % (fb, text_file(tmp, "c%03d" % i, t), WHITE, CAP_Y, a, z))
     if spec.get("hook"):
         n = spec.get("hook_len", 4.0) or dur
+        if spec.get("outro"):     # the outro takes the hook's place at the end
+            n = min(n, max(0.0, dur - spec.get("outro_len", 3.0)))
         lines = spec["hook"].split("\n")
         for j, line in enumerate(lines):
             draw.append("drawtext=fontfile='%s':textfile='%s':expansion=none:fontsize=78:fontcolor=%s:borderw=7:"
                         "bordercolor=black:x=(w-text_w)/2:y=%d:enable='lt(t,%s)'"
                         % (fb, text_file(tmp, "hook%d" % j, line), YELLOW, 200 + 100 * j, n))
+    if spec.get("outro"):
+        n = spec.get("outro_len", 3.0)
+        for j, line in enumerate(spec["outro"].split("\n")):
+            draw.append("drawtext=fontfile='%s':textfile='%s':expansion=none:fontsize=78:fontcolor=%s:borderw=7:"
+                        "bordercolor=black:x=(w-text_w)/2:y=%d:enable='gte(t,%s)'"
+                        % (fb, text_file(tmp, "outro%d" % j, line), YELLOW, 200 + 100 * j, max(0.0, dur - n)))
     note_y = 200 + 100 * len(spec.get("hook", "").split("\n")) + 30 if spec.get("hook") else 200
     for k, (t0, n, text) in enumerate(spec.get("notes", [])):
         for j, line in enumerate(text.split("\n")):

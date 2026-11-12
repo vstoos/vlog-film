@@ -66,6 +66,9 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
 - **Name the question in the first 10 s**: the teaser opens with the challenge or question the film
   answers (with its number: "1650 km in one calendar day"), then 2-4 phrases of how it goes, and ends on
   the open question or a promise ("the numbers at the end"). Mood shots and greetings come after.
+- **From the teaser straight to the point**: the title card is 5-7 s at most, and the first talk after it
+  starts with the trip, not "привіт, довго не бачилися": keep one greeting phrase at most, drop the
+  channel and name introduction (analytics review, 2026-11-12).
 - **Order by the question, not the clock**: what answers the question stays, talk that only fills the
   drive goes, even when it was said in that order on the day.
 - **Aim for 10-15 min** for a new film (the user's own wish too); a long trip can become 2-3 films, one
@@ -166,6 +169,11 @@ face jump), shows a shot without a face whole over a blurred fill, puts pictures
 mentions) over the whole frame, face included (the user: a small box half over the face looks worse; `"box"` as 4th item keeps the old box), and burns word-timed captions; `"music": [file, offset]` lays a quiet bed under the voice (14 LU down, fades in and out). The first run writes
 `short.words.json` next to the spec: fix names and numbers there and run again. Look at frames of every
 shot before sending it. Plan the batch in the project's shorts_plan.md: which long video each one points to.
+Every Short gives the viewer a reason to open the long video: `"outro": "Вся поїздка:
+посилання над назвою"`
+puts that line at the top for the last seconds (`outro_len`, default 3 s; the Related-video link shows above
+the title in the Shorts player), and the dub texts end with the same line in each language. Set Related
+video, the first description line and a pinned comment with the film link as well.
 
 Choosing and cutting (Helm batch, 2026-11-09):
 - One complete thought, 30-60 s; ranges from word timings (`transcripts/<clip>.json`, words `w/s/e`),
