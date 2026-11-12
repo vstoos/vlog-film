@@ -56,7 +56,27 @@ subtitles go there too, because that is where the user looks. Working files go i
 Propose the structure to the user in a few lines before building: the teaser, the parts, which
 photos, maps or stills illustrate which talk. Typical shape:
 
-- **Teaser (HOOK)**: 4-6 short, strong phrases from across the trip, each a complete thought.
+**What the channel's numbers say (YouTube Analytics, 2026-11-11).** Focused 6-14 min videos that answer
+one owner's question (12 V error, which used Model 3, LFP on the motorway) keep 44-49 % of the video and
+58-68 % of viewers at 1:00; the long trip films (24-45 min) keep 16-23 % and lose 40-57 % in the first
+minute, which is where they lose most against similar videos. Search brings people with a question
+("tesla model 3 lfp", "michelin pilot alpin 5"), so the films are not short of interest; they hide the
+answer. The user films unscripted and will not shoot for viewers, so these are editing rules:
+
+- **Name the question in the first 10 s**: the teaser opens with the challenge or question the film
+  answers (with its number: "1650 km in one calendar day"), then 2-4 phrases of how it goes, and ends on
+  the open question or a promise ("the numbers at the end"). Mood shots and greetings come after.
+- **Order by the question, not the clock**: what answers the question stays, talk that only fills the
+  drive goes, even when it was said in that order on the day.
+- **Aim for 10-15 min** for a new film (the user's own wish too); a long trip can become 2-3 films, one
+  question each, rather than one 25-45 min film. Road inserts 3-5 s between talk, longer only where the
+  road is the story.
+- **Title and chapters in the viewer's search words** with the number ("Tesla Model 3 LFP: real winter
+  range"), not the trip's name.
+- After publishing, `yt_stats.py` (references/youtube.md, "After publishing") shows whether it worked.
+
+- **Teaser (HOOK)**: 4-6 short, strong phrases from across the trip, each a complete thought; the first
+  one names the challenge or question (see above).
 - **Title card** on road footage, then talk blocks separated by 4-10 s road inserts under music.
 - Inserts where the talk refers to something: the receipt when fuel is mentioned, the inspection
   stand when the inspection is, a route map at the start of each leg.

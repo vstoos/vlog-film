@@ -88,6 +88,18 @@ The upload writes `<video>.youtube.json` with the video id next to the mp4. Not 
 the API: own dubbed audio tracks and end-screen tiles; tell the user to add them in Studio
 (Languages > Add audio track; End screen).
 
+## After publishing (scripts/yt_stats.py)
+
+A week after a film goes public (Analytics lags 2-3 days behind Studio):
+`python yt_stats.py <VIDEO_ID>` prints views, how many still watch at 0:30 / 1:00 / 2:00 / 5:00 ...
+(with YouTube's comparison to similar videos, 0.5 = average), the biggest drops in film time, where the
+viewers came from, their search terms and countries. Run `timeline.py film/<name>.mlt <mm:ss>` for each
+drop and tell the user in a short paragraph what was on screen there and what to do differently next
+time; the three numbers that matter to them: still watching at 1:00 (aim 65 %+), the biggest drop,
+the search terms. Video ids: the `<video>.youtube.json` that the upload wrote, or the channel feed
+`https://www.youtube.com/feeds/videos.xml?channel_id=UC2P3WgLXv9c6D2aOdd1KwhQ` (last 15, with views,
+no quota). Revenue needs another OAuth scope (yt-analytics-monetary.readonly), not granted yet.
+
 ## Auto-dubbing
 
 YouTube dubs Ukrainian videos automatically only into English (as of 2026); dubs cannot be edited,
