@@ -49,7 +49,8 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
      x ~5 frames (Audacity / Ocean Audio "noise reduction" done in numpy+scipy);
   2. then DeepFilterNet (official deep-filter.exe v0.5.6, `-D -a 12`, 48 kHz wav; it drops the last ~30 ms,
      the start stays aligned, so pad the end).
-  The whole clip is processed and remuxed under the video (`<clip>_dn.mov`), so every jump cut gets the same
+  Only for clips under about 16 dB speech-over-floor: the clean ones (17-37 dB in Helm 2) were left alone, there
+  is little to gain and every pass costs some voice. The whole clip is processed and remuxed under the video (`<clip>_dn.mov`), so every jump cut gets the same
   treatment. The gap went to 17-28 dB; the user: "відчутно кращі, не ріже вухо". Rejected: ffmpeg afftdn (the noise
   "warbles", not quieter), EQ cuts (the noise is not only low), DeepFilterNet alone at -20 dB (took the low end off
   the voice on some clips; fine on one), -8/-12 alone (too little). Make before/after samples per clip (12 s
