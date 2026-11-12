@@ -42,6 +42,19 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   turned it down and buried the voice (Helm 2, 4:39: -5.7 dB on a clip whose voice was quiet). filmkit now cuts
   under VOICE_HIGHPASS (120 Hz, 24 dB/oct) on every talk entry and measures the voice above VOICE_MEASURE_HP
   (200 Hz); such clips now get about +7 dB relative to before. A spectrogram (`showspectrumpic`, fscale=log) shows it.
+- Steady road noise under the voice (Helm 2, 12 clips with speech only 5-15 dB over the floor, measured as
+  p90 vs p10 of 50 ms RMS per talk block): what the user approved by ear, after rejecting the rest:
+  1. a noise profile from the clip's own pauses (gaps of 0.6 s+ between transcript words, the quietest 60 % of
+     those frames), every STFT bin under profile mean + 1.5 std turned down 12 dB, the mask smoothed over ~3 bins
+     x ~5 frames (Audacity / Ocean Audio "noise reduction" done in numpy+scipy);
+  2. then DeepFilterNet (official deep-filter.exe v0.5.6, `-D -a 12`, 48 kHz wav; it drops the last ~30 ms,
+     the start stays aligned, so pad the end).
+  The whole clip is processed and remuxed under the video (`<clip>_dn.mov`), so every jump cut gets the same
+  treatment. The gap went to 17-28 dB; the user: "відчутно кращі, не ріже вухо". Rejected: ffmpeg afftdn (the noise
+  "warbles", not quieter), EQ cuts (the noise is not only low), DeepFilterNet alone at -20 dB (took the low end off
+  the voice on some clips; fine on one), -8/-12 alone (too little). Make before/after samples per clip (12 s
+  original, 12 s processed, level-matched) and let the user choose; the project's tools/denoise.py and
+  tools/nr_profile.py in C:/Data/helm2-video are the working version.
 - The final render is loudness-normalised to -14 LUFS (two-pass loudnorm, linear). After levelling,
   neighbouring sections should be within 1-2 dB; check the ones the user complained about.
 - Music sits at -15 dB, rises under the last words before an insert and fades under the first
