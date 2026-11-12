@@ -2,7 +2,8 @@
 
 filmkit shows the talking clip only while it talks: what must appear over the speech (b-roll, a phone
 screenshot, a caption) goes into the clip's picture. A portrait picture (phone screenshot, vertical clip,
-portrait photo) stands at full frame height beside the speaker's face, which stays in view; a landscape
+portrait photo) stands at full frame height flush against the frame edge on the free side of the
+speaker's face, which stays in view; a landscape
 one covers the frame.
 
 usage: python burn_in.py <clip.mov> <out.mov> <spec.json>
@@ -23,7 +24,6 @@ import vfconfig as vf
 
 W, H = 1920, 1080
 FADE = 0.3          # a portrait picture fades in and out; one right after another replaces it without a blink
-MARGIN = 40         # px between a portrait picture and the frame edge
 HLG_TAGS = ["-color_primaries", "bt2020", "-color_trc", "arib-std-b67", "-colorspace", "bt2020nc"]
 SDR_TO_HLG = ("setparams=color_trc=bt709:color_primaries=bt709:colorspace=bt709:range=tv,format=yuv444p,"
               "libplacebo=colorspace=bt2020nc:color_primaries=bt2020:color_trc=arib-std-b67:range=tv:format=yuv420p10le,")
@@ -70,15 +70,14 @@ def face_box(clip, t0, n, samples=3):
 
 
 def side_x(clip, t0, n, pic_w):
-    """Left edge for a portrait picture pic_w wide: the middle of the wider free side of the face, kept
-    off the face where it fits. Without a face: the left side."""
+    """Left edge for a portrait picture pic_w wide: flush against the frame edge on the wider free side of
+    the face (user 2026-11-12: a picture set in from the edge covered part of the face), so it keeps as far
+    from the face as it can. Without a face: the left edge."""
     box = face_box(clip, t0, n)
     if not box:
-        return MARGIN
-    left, right = box[0] - MARGIN, W - box[1] - MARGIN      # room left of the face, right of it
-    if left >= right:
-        return int(max(MARGIN, (left - pic_w) / 2))
-    return int(min(W - MARGIN - pic_w, box[1] + MARGIN + max(0, (right - pic_w) / 2)))
+        return 0
+    left, right = box[0], W - box[1]      # room left of the face, right of it
+    return 0 if left >= right else W - pic_w
 
 
 def pic_input(k, t0, n, pic, at, speed=1.0, fades=(True, True)):

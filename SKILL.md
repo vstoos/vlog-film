@@ -88,7 +88,8 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
 - **Pictures over the voice** (b-roll, phone screenshots, captions while the speaker goes on talking):
   burn them into the talking clip with `burn_in.py`, before filmkit (it shows a talking clip only while
   it talks). A portrait picture (screenshot, vertical clip, portrait photo) stands at full frame height
-  on the free side of the speaker's face, found by face detection, so the face stays in view; the
+  flush against the frame edge on the free side of the speaker's face (found by face detection; never set in
+  from the edge, it would creep onto the face), so the face stays in view; the
   phone's clock and buttons fill the top and bottom anyway. A landscape picture covers the frame.
 - Road inserts should show what the story needs at that point (the slip road into the petrol
   station before "we stopped", the airport car park before the scene at the airport), not just any
