@@ -71,8 +71,9 @@ have their own bucket of 100 a day; captions cost 400 and thumbnails 50 of the 1
   deleting; the `NoDelete` wrapper refuses every delete method. Keep it that way: the user asked.
 - Always `--dry-run` first: it checks every file and prints what would go up, without touching YouTube.
 - Upload as private (default) or `--publish-at`; the user makes it public after a look in Studio.
-  Videos from an unaudited API project may stay locked private until Google's audit; publishing in
-  Studio by hand still works.
+  Scheduling through the API works on this project: Yaris S2 (cbCOnD_jt9E), uploaded with `--publish-at`,
+  went public on time on 2026-11-12 with no lock. (Videos from an unaudited API project can be locked
+  private; if that ever happens, publish in Studio by hand.)
 
 ```
 python yt_upload.py upload <footage>/<Name>_HLG.mp4 --title "..." --desc <footage>/YouTube_description.txt \
