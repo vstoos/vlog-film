@@ -193,6 +193,19 @@ Choosing and cutting (Helm batch, 2026-11-09):
   just before the next word, and cut a silent tail with `"until"`.
 - Phone copy for the user: tone-map to SDR h264 (libplacebo bt.2390) and keep it under the messenger limit.
 
+What the numbers say (YouTube Studio, LG battery Short S1, 2026-11-12: 1 400 views, 83 % non-subscribers,
+but 48 % swiped away, and the curve fell from ~110 % to ~60 % at 0:04-0:08):
+- The hook asks, it does not list specs. "Model 3: батарея E5D / LG M48, 74,5 кВтг" lost half the feed;
+  write the question the Short answers ("Що стало з батареєю Tesla після 192 000 км?").
+- Do not give the answer in the first seconds: S1 said "Деградація невелика... 12 %" at 0:01-0:05 and the
+  viewers left right there. Open with the tension or the surprising part (S1: "never 250 kW", "slower than
+  Panasonic"), keep the number or the verdict for the second half.
+- Pictures over the face in the first 10 s for 2-3 s at most, then back to the face; S1 covered the face
+  with the battery-test screenshot 0:05-0:10 while the talk was only numbers.
+- Every Short ends with the outro line to the long video (above); S1 had none and brought 1 subscriber.
+- Already published or scheduled-for-today Shorts are not rebuilt for these rules (the user, 12.11);
+  apply them to the Shorts still in the plan.
+
 ## Privacy
 
 Plates: the user does not blur ordinary traffic (Poland; the floating box spoils road shots).
