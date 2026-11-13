@@ -28,6 +28,7 @@ YouTube Studio -> Languages.
 import argparse
 import json
 import os
+import re
 import sys
 import time
 from pathlib import Path
@@ -48,12 +49,26 @@ def log(msg):
     print(msg, flush=True)
 
 
+def win_path(s):
+    """git-bash style /c/Data/x -> C:/Data/x (Windows Python does not understand the former)."""
+    m = re.match(r"^/([a-zA-Z])/(.*)$", s)
+    return f"{m.group(1).upper()}:/{m.group(2)}" if m else s
+
+
 def read_text(path_or_text):
-    """A value may be a path to a .txt file or the text itself."""
+    """A value may be a path to a .txt/.md file or the text itself.
+
+    A value that ends in .txt/.md is always taken as a path: if the file is missing the script stops,
+    so a path never goes up to YouTube as the description (it did on 12.11.2026: a /c/... path from
+    git-bash was not found and became the EN description of the Mercedes film).
+    """
     if path_or_text is None:
         return None
-    p = Path(path_or_text)
-    if p.suffix.lower() in (".txt", ".md") and p.is_file():
+    s = path_or_text.strip()
+    p = Path(win_path(s))
+    if p.suffix.lower() in (".txt", ".md"):
+        if not p.is_file():
+            sys.exit(f"ERROR: description file not found: {s}")
         return p.read_text(encoding="utf-8").strip()
     return path_or_text
 
@@ -64,7 +79,11 @@ def parse_pairs(items, what):
         if "=" not in item:
             sys.exit(f"ERROR: {what} must look like lang=value, got: {item}")
         lang, val = item.split("=", 1)
-        out[lang.strip()] = val.strip().strip('"')
+        val = val.strip()
+        # drop only a pair of wrapping quotes: a title like '"Tesla is noisy"? Listen' keeps its own
+        if len(val) >= 2 and val[0] == val[-1] == '"' and val.count('"') == 2:
+            val = val[1:-1]
+        out[lang.strip()] = win_path(val) if what == "--sub" else val
     return out
 
 

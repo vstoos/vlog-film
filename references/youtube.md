@@ -85,9 +85,25 @@ python yt_upload.py thumb <VIDEO_ID> thumb2.jpg
 python yt_upload.py loc <VIDEO_ID> --loc en="Title|desc.en.txt"
 ```
 
+Description files: a `--desc`/`--loc` value ending in .txt/.md is always read as a file and the script
+stops if it is missing (12.11.2026 a git-bash `/c/...` path was not found and went up as the EN
+description of the Mercedes film; `/c/...` is now turned into `C:/...`). Check `--dry-run` output for it.
+
 The upload writes `<video>.youtube.json` with the video id next to the mp4. Not possible through
 the API: own dubbed audio tracks and end-screen tiles; tell the user to add them in Studio
 (Languages > Add audio track; End screen).
+
+## Pinned comment (scripts/yt_comment.py)
+
+Every film and every Short gets the channel's own comment, which the user pins (the API cannot pin).
+Shorts: first line the film link ("Повне відео ...: https://youtu.be/..."), second a question to the
+viewers; films: a question, then a subscribe line (the subscribe ask goes on films, not on Shorts:
+a Short keeps one call to action, the outro). The texts live in
+`%USERPROFILE%/Videos/YouTube_comments/comments.json` (`video` id, or `mp4` whose .youtube.json gives
+the id); add each new film and Short there when it is uploaded. The Windows task "YouTube pinned
+comments" runs `run_comments.cmd` daily at 17:20: it posts a comment once the video is public (50 units),
+never twice, never edits or deletes, and rewrites `checklist.md` for the user's phone. The film link in a
+Short's description and comment must be the film that is actually public (a re-uploaded film gets a new id).
 
 ## After publishing (scripts/yt_stats.py)
 
