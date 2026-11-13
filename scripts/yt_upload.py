@@ -83,7 +83,12 @@ def parse_pairs(items, what):
         # drop only a pair of wrapping quotes: a title like '"Tesla is noisy"? Listen' keeps its own
         if len(val) >= 2 and val[0] == val[-1] == '"' and val.count('"') == 2:
             val = val[1:-1]
-        out[lang.strip()] = win_path(val) if what == "--sub" else val
+        lang = lang.strip()
+        # Studio uses English (United States); a plain "en" shows up as a second, generic English
+        # next to it (user, 13.11.2026), so always send en-US
+        if lang.lower() == "en":
+            lang = "en-US"
+        out[lang] = win_path(val) if what == "--sub" else val
     return out
 
 

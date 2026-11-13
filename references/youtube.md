@@ -88,6 +88,8 @@ python yt_upload.py loc <VIDEO_ID> --loc en="Title|desc.en.txt"
 Description files: a `--desc`/`--loc` value ending in .txt/.md is always read as a file and the script
 stops if it is missing (12.11.2026 a git-bash `/c/...` path was not found and went up as the EN
 description of the Mercedes film; `/c/...` is now turned into `C:/...`). Check `--dry-run` output for it.
+Language `en` is sent as `en-US` for titles and subtitles: Studio uses English (United States), and a
+plain `en` shows up as a second, generic English (user, 13.11.2026).
 
 The upload writes `<video>.youtube.json` with the video id next to the mp4. Not possible through
 the API: own dubbed audio tracks and end-screen tiles; tell the user to add them in Studio
