@@ -29,6 +29,10 @@ bottom free for the end-screen tiles the user adds in YouTube Studio.
 - `python make_thumb.py <frame.png> <out.jpg> "HEADLINE!" "second line" --plate x0,y0,x1,y1`:
   1280x720 JPEG, big yellow Segoe UI Black headline with black outline, white second line, top of
   the frame darkened so the text reads; plates blurred.
+- Studio A/B test (Test & compare, up to 3 thumbnails; it compares watch time share, not clicks):
+  Helm 1 (14.11.2026) "all performed well", i.e. no clear winner: the user's face + "1255 КМ ЗА ДЕНЬ"
+  41 %, "ПІСЛЯ ГАРАНТІЇ" car shot 32 %, "192 000 КМ" car shot 25 %. Offer the face + one big number
+  as one of the variants and run the test on every film.
 - The user prefers the untouched frame; offer AI enhancement (Gemini) only as an option. If used,
   the key is in the GEMINI_API_KEY user environment variable (never in files or chat).
 
@@ -89,7 +93,9 @@ Description files: a `--desc`/`--loc` value ending in .txt/.md is always read as
 stops if it is missing (12.11.2026 a git-bash `/c/...` path was not found and went up as the EN
 description of the Mercedes film; `/c/...` is now turned into `C:/...`). Check `--dry-run` output for it.
 Language `en` is sent as `en-US` for titles and subtitles: Studio uses English (United States), and a
-plain `en` shows up as a second, generic English (user, 13.11.2026).
+plain `en` shows up as a second, generic English (user, 13.11.2026). On the Mercedes film it was a
+subtitle track `en` next to `en-US` and Studio would not delete it; removed 14.11 with a one-off
+`_raw_service().captions().delete` after the user asked (the NoDelete guard itself stays).
 
 The upload writes `<video>.youtube.json` with the video id next to the mp4. Not possible through
 the API: own dubbed audio tracks and end-screen tiles; tell the user to add them in Studio
