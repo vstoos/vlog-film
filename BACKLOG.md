@@ -207,3 +207,18 @@
 - How found: Helm 2 build 3, 11.11.2026; frames at 0:40, 1:27, 2:15, 2:35, 3:59, 8:38, 23:31 looked fine.
 - How bad: low, but a false alarm costs a frame check each render. Idea: flag only near-flat frames (low
   U/V spread, signalstats UDIF/VDIF or YHIGH-YLOW) or long runs.
+
+## Build TeslaCam films from the user's own notes (teslacam-viewer)
+
+- What: the user now marks moments in TeslaCam footage with the viewer at C:/Data/teslacam-viewer
+  (github.com/vstoos/teslacam-viewer, private). Notes go to C:/Data/teslacam-viewer/notes.json; the
+  ones with `"film": true` are meant for the film, and their text is the user's own account of what
+  happened. The skill should read them instead of guessing scenes: each note gives the event folder,
+  the minute file (`clip`) and second in it (`clip_t`), the car's clock time (`wall`) and the camera
+  that showed it (`cam`). Format: README.md of that repo.
+- Where: no code yet. The TeslaCam project (C:/Data/teslacam-video, tc_scenes.py) holds scenes as
+  (folder, window around the save time); a reader would turn each film note into such a window
+  (for example 8 s before to 4 s after) and write the commentary from the note's text.
+- How found: the user's request, 14.11.2026: the commentary in draft 2 described some scenes wrongly
+  because the scenes were picked by detectors, not by the person who was there.
+- How bad: medium. Needed before the next TeslaCam build; the user is reselecting scenes with the viewer now.
