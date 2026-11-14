@@ -1,6 +1,6 @@
 """YouTube thumbnail: a frame (raw or improved in Gemini) + big outlined headline + smaller line.
 
-usage: python make_thumb.py <image> <out.jpg> "<HEADLINE>" "<second line>" [--plate x0,y0,x1,y1]
+usage: python make_thumb.py <image> <out.jpg> "<HEADLINE>" "<second line>" [--plate x0,y0,x1,y1] [--bottom]
 Coordinates for --plate are in the source image's pixels. Output is 1280x720 JPEG under 2 MB.
 """
 import argparse
@@ -25,7 +25,7 @@ def fit_font(draw, text, path, max_w, start):
     return ImageFont.truetype(path, size)
 
 
-def make(src, out, headline, line2, plate=None):
+def make(src, out, headline, line2, plate=None, bottom=False):
     im = Image.open(src).convert("RGB")
     if plate:
         im.paste(im.crop(plate).filter(ImageFilter.GaussianBlur(14)), plate)
@@ -43,7 +43,16 @@ def make(src, out, headline, line2, plate=None):
     if line2:
         f2 = fit_font(d, line2, BOLD_FONT, W - 120, 64)
         tw = d.textlength(line2, font=f2)
-        d.text(((W - tw) / 2, 22 + f1.size + 18), line2, font=f2, fill=(255, 255, 255),
+        y2 = 22 + f1.size + 18
+        if bottom:      # under the headline it can cover the forehead (user 14.11.2026): put it at the bottom edge
+            shade = Image.new("L", (W, H))
+            sd = ImageDraw.Draw(shade)
+            for y in range(H - 200, H):
+                sd.line([(0, y), (W, y)], fill=int(170 * (y - (H - 200)) / 200))
+            im = Image.composite(Image.new("RGB", (W, H), (0, 0, 0)), im, shade)
+            d = ImageDraw.Draw(im)
+            y2 = H - f2.size - 40
+        d.text(((W - tw) / 2, y2), line2, font=f2, fill=(255, 255, 255),
                stroke_width=5, stroke_fill=(0, 0, 0))
     im.save(out, quality=92)
 
@@ -55,5 +64,6 @@ if __name__ == "__main__":
     ap.add_argument("headline")
     ap.add_argument("line2", nargs="?", default="")
     ap.add_argument("--plate", help="x0,y0,x1,y1 to blur, in source pixels")
+    ap.add_argument("--bottom", action="store_true", help="second line at the bottom edge, clear of the face")
     a = ap.parse_args()
-    make(a.src, a.out, a.headline, a.line2, tuple(int(v) for v in a.plate.split(",")) if a.plate else None)
+    make(a.src, a.out, a.headline, a.line2, tuple(int(v) for v in a.plate.split(",")) if a.plate else None, a.bottom)

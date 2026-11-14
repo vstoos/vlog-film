@@ -29,6 +29,8 @@ bottom free for the end-screen tiles the user adds in YouTube Studio.
 - `python make_thumb.py <frame.png> <out.jpg> "HEADLINE!" "second line" --plate x0,y0,x1,y1`:
   1280x720 JPEG, big yellow Segoe UI Black headline with black outline, white second line, top of
   the frame darkened so the text reads; plates blurred.
+  Text must not cover the face: with the face high in the frame, pass `--bottom` so the second line sits
+  at the bottom edge (user 14.11.2026: under the headline it covered the forehead).
 - Studio A/B test (Test & compare, up to 3 thumbnails; it compares watch time share, not clicks):
   Helm 1 (14.11.2026) "all performed well", i.e. no clear winner: the user's face + "1255 КМ ЗА ДЕНЬ"
   41 %, "ПІСЛЯ ГАРАНТІЇ" car shot 32 %, "192 000 КМ" car shot 25 %. Offer the face + one big number
