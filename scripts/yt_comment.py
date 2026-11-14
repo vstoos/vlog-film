@@ -8,7 +8,7 @@ It never deletes or edits a comment (yt_upload.service() refuses every delete me
 comments.json: {"comments": [{"date": "2026-11-14", "label": "...", "video": "<id>" | "mp4": "<file>",
 "text": "..."}]}; "mp4" takes the id from the <file>.youtube.json that yt_upload.py writes.
 Next to it the script keeps posted.json (video id -> comment id; a video is never commented twice,
-and a comment of the channel already under the video with the same first line counts as posted) and
+and any top-level comment of the channel already under the video counts as posted) and
 writes checklist.md. Cost: 50 quota units per comment, 1 per check. Run daily after the 17:00 releases.
 """
 import argparse
@@ -75,15 +75,15 @@ def main():
             continue
         if me is None:
             me = yt.channels().list(part="id", mine=True).execute()["items"][0]["id"]
-        # a comment of ours already there (state file lost, posted by hand) counts as posted
+        # any top-level comment of the channel already there counts as posted: the user may have
+        # written their own (Helm 1 had a pinned "conclusions" comment, and a second one went up 14.11)
         r = yt.commentThreads().list(part="snippet", videoId=vid, maxResults=100,
                                      textFormat="plainText").execute()
         mine = [t for t in r.get("items", [])
-                if t["snippet"]["topLevelComment"]["snippet"].get("authorChannelId", {}).get("value") == me
-                and first_line(t["snippet"]["topLevelComment"]["snippet"]["textDisplay"]) == first_line(e["text"])]
+                if t["snippet"]["topLevelComment"]["snippet"].get("authorChannelId", {}).get("value") == me]
         if mine:
             posted[vid] = {"comment": mine[0]["id"], "date": dt.date.today().isoformat(), "found": True}
-            print(f"FOUND (already there): {e['label']}")
+            print(f"FOUND (own comment already there, not posting): {e['label']}")
             continue
         if a.dry_run:
             print(f"DRY RUN would post under {vid} ({e['label']}):\n  " + e["text"].replace("\n", "\n  "))
@@ -110,7 +110,9 @@ def main():
              "біля свого коментаря меню (три крапки) > Закріпити. Після цього можна поставити [x].", ""]
     for e in entries:
         vid, d = e["id"], e["date"]
-        if vid in posted:
+        if vid in posted and posted[vid].get("found"):
+            mark = "[ ] ваш коментар уже був, скрипт не писав: перевірте, що закріплено"
+        elif vid in posted:
             mark = f"[ ] **закріпити** (опубліковано {posted[vid]['date']})"
         elif d <= today and vid:
             mark = "чекає (відео ще не публічне або квота)"
