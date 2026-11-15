@@ -91,6 +91,18 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
   flush against the frame edge on the free side of the speaker's face (found by face detection; never set in
   from the edge, it would creep onto the face), so the face stays in view; the
   phone's clock and buttons fill the top and bottom anyway. A landscape picture covers the frame.
+- **Talk without the face on screen** (the camera shows the road, the charger, the car, not the speaker):
+  cut the sound and the picture apart. Jump cuts on the speech go in the audio only; the picture is a
+  separate pick of the moments that show something: the charger screen with kW and %, plugging in the
+  connector, the price, the view ahead. Leave out what says nothing: getting in or out of the car, the
+  camera pointing at the floor or the seat, walking to the charger, fumbling with the phone. A
+  jump-cut picture of a face-less shot looks like a glitch; a picture chosen for meaning does not.
+  How, today (filmkit has no item for it): pick the kept speech ranges from the transcript (the same
+  GAP_CUT/PAD rules), concatenate their audio with ffmpeg; choose picture pieces from a contact sheet of
+  the clip (and other clips of the same place) adding up to the same length, concatenate them; mux both
+  into `film/<clip>_split.mov`, point CLIP_SRC at it and put it in the EDL as one `"keep"` talk range.
+  Check the result by ear and eye: no word cut at a joint, and the picture matches what is said
+  ("37 kW" on screen when the voice says 37 kW, as near as the footage allows).
 - Road inserts should show what the story needs at that point (the slip road into the petrol
   station before "we stopped", the airport car park before the scene at the airport), not just any
   motorway: look at a contact sheet of the road clip around the right moment.
