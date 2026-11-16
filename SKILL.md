@@ -88,6 +88,13 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
 - **Title card** on road footage, then talk blocks separated by 4-10 s road inserts under music.
 - Inserts where the talk refers to something: the receipt when fuel is mentioned, the inspection
   stand when the inspection is, a route map at the start of each leg.
+- **Every trip film gets an animated route map per day (or per leg), plan first, then the report**
+  (user, Diesel 2026-11-15, a standing rule): phase 1 the plan before departure (Google time and km; for an
+  EV the plan = Google time + the planner's charging time with a buffer, charger pins); phase 2 the real
+  drive, leg by leg, with a pin at every stop (times, length, why we stopped, which charger was there, even
+  when the car did not need it) and a legs table growing row by row, ending on the day's total next to the
+  plan. Numbers from trip_stats.md; ask the user for a plan that was not saved. Template:
+  `references/example_make_route_days.py`; show it over the voice in two halves (below).
 - **Trip numbers** (charge captions, battery % on route legs, summary card): collect and check them
   first, in the project's trip_stats.md, as `references/trip_stats.md` describes.
 - **Pictures over the voice** (b-roll, phone screenshots, captions while the speaker goes on talking):
@@ -270,5 +277,6 @@ user's home; do not put other people's faces (children above all) on thumbnails 
 - `references/trip_stats.md`: trip numbers (car screen, logger, charger apps, tariff): which source
   wins, the project's trip_stats.md, charge captions with the whole stop time, route legs, summary
   card, conclusion, how to report them.
+- `references/example_make_route_days.py`: day maps with the plan phase and a stop-by-stop report (Diesel).
 - `references/example_make_route.py`: animated route map (Sentinel-2 tiles + OSRM roads) from the
   Yaris film; adapt its constants (bounds, cities, pins, legs) for a new trip.
