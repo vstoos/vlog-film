@@ -103,6 +103,12 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   `blur_plates.py --faces` (OpenCV YuNet). At a low score it took reflections in car paint for
   faces and put large blurs on the car; score 0.75 and a maximum face width of 12% of the frame
   fixed that. Check a dense contact sheet (every 0.2 s) of the moments with people.
+- The user's child in the back seat: an animated smiley (`kid_sticker.py`), not a blur (Helm 2026-11-11,
+  Diesel 2026-11-14). The plate model blurred the driver's sunglasses and the side window instead
+  (reflections read as plates), so talking clips with ordinary traffic go without plate blur.
+  Order: `_land` -> `_kid` -> `burn_in` -> `_over`/`_v3`; a burn from `_land` drops the smiley.
+- Run burn_in.py jobs one at a time: caption text files are named by index in the output folder, so two
+  jobs at once swap captions (BACKLOG.md).
 - Route maps start at a public point (the first petrol station), never at the user's home.
 - Do not put other people's children or faces on thumbnails without the user asking.
 

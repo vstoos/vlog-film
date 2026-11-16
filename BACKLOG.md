@@ -222,3 +222,11 @@
 - How found: the user's request, 14.11.2026: the commentary in draft 2 described some scenes wrongly
   because the scenes were picked by detectors, not by the person who was there.
 - How bad: medium. Needed before the next TeslaCam build; the user is reselecting scenes with the viewer now.
+
+## burn_in.py: two runs at once in the same folder swap their captions
+- What: caption() writes its text files as <folder>/b0, b1 ... (scripts/burn_in.py:253, name "b%d"), shared by
+  every burn_in run whose output is in that folder. Two runs in parallel overwrite each other's text.
+- How found: diesel_cro 16.11.2026, IMG_8021 and IMG_8057 burnt in parallel into film/: IMG_8021_over.mov got
+  the Brno caption of IMG_8057. Re-running alone fixed it.
+- Fix: name the files after the output ("<out stem>_b%d"), as arrow_png already does.
+- How bad: low, but silent: the wrong caption is only seen on a check frame.

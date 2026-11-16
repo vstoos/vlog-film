@@ -77,6 +77,11 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
 - **Title and chapters in the viewer's search words** with the number ("Tesla Model 3 LFP: real winter
   range"), not the trip's name.
 - After publishing, `yt_stats.py` (references/youtube.md, "After publishing") shows whether it worked.
+- **Retention review before the big build**: dump the planned film as text (each EDL item with its approximate
+  film time and the spoken words of every range from the transcripts) and have a second reader judge it
+  against these rules (Diesel 2026-11-16: hook, greetings, repeats, tangents, the open loop, the ending).
+  Log the proposals in edit_notes.md and let the user pick; a full and a tight cut side by side (below)
+  lets them compare.
 
 - **Teaser (HOOK)**: 4-6 short, strong phrases from across the trip, each a complete thought; the first
   one names the challenge or question (see above).
@@ -103,6 +108,23 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
   into `film/<clip>_split.mov`, point CLIP_SRC at it and put it in the EDL as one `"keep"` talk range.
   Check the result by ear and eye: no word cut at a joint, and the picture matches what is said
   ("37 kW" on screen when the voice says 37 kW, as near as the footage allows).
+- **Route maps over the voice, in two halves** (Diesel 2026-11-16): a map block under music shows every
+  stop before the story reaches it and costs ~20 s of silence. Cut the rendered map in two HLG pieces
+  (ffmpeg `-ss/-t`, `tpad=stop_mode=clone` to hold the last frame, the SDR->HLG chain of filmkit's
+  render_anim) and burn them as b-roll over talk that says the same: the plan panel (Google time, Tesla
+  charge pins) where the speaker talks about planning, the drawn route with stops, leg table and total
+  where he sums the day up. Mark those talk ranges `"keep"` so jump cuts do not skip map frames, and give
+  the finished table 4-5 s on screen.
+- **Hook pictures and open loops**: burn the film's question as a caption over the first shot, so it is
+  on screen from frame 1; when the talk opens with the reason for the trip (an accident, a breakdown),
+  put 2-3 s of the evidence over the words (damage photos: crop off bystanders, blur the plate). Plant
+  the payoff early as a caption where the speaker touches on it ("Через рік - той самий шлях Теслою за
+  одну добу. Скільки годин? В кінці") and keep the number for the end card.
+- **Two cuts to compare** (a full one and a tight one): one `v3_common.py` holding the EDL with a
+  `SHORT` switch, and `project_long.py` / `project_short.py` that set SHORT and FILM_NAME and `exec()` it.
+  Give each its own OUT (`film_long/`, `film_short/`: inserts are named by position and would overwrite
+  each other) and point CLIP_SRC of every rotated clip at the shared `film/` copies, or filmkit renders
+  the `_land` copies again.
 - Road inserts should show what the story needs at that point (the slip road into the petrol
   station before "we stopped", the airport car park before the scene at the airport), not just any
   motorway: look at a contact sheet of the road clip around the right moment.
@@ -116,7 +138,9 @@ and per-clip options are documented there. Talk ranges come from the transcript 
 
 ```
 python $K/blur_plates.py <footage> <project>/film [--faces] IMG_0089 ...   # plates; --faces: people too
-python $K/burn_in.py film/IMG_0089_blur.mov film/IMG_0089_over.mov spec.json   # pictures over speech, if any
+python $K/kid_faces.py <project>/project.py > film_check/kid/faces.txt   # a child behind the driver?
+python $K/kid_sticker.py kid.json                                  # animated smiley -> film/<clip>_kid.mov
+python $K/burn_in.py film/IMG_0089_kid.mov film/IMG_0089_over.mov spec.json   # pictures over speech, if any
 python $K/filmkit.py <project>/project.py                        # renders inserts, writes film/<name>.mlt
 python $K/render_final.py <project>/film <name> <footage>/<Name>_HLG.mp4   # long: run in background
 ```
@@ -224,7 +248,14 @@ Plates: the user does not blur ordinary traffic (Poland; the floating box spoils
 Blur a plate only where the clip shows that driver's possible violation or a near miss, so the film
 cannot feed a complaint against a person; road inserts go in as is via CLIP_SRC in the project.
 Blur the faces of staff, passers-by and children
-(`blur_plates.py --faces`; check the frames, reflections in car paint can fool it); start route maps at a public place, never at the
+(`blur_plates.py --faces`; check the frames, reflections in car paint can fool it). The user's own child in
+the back seat of a talking clip gets an animated smiley instead of a blur (user, Helm and Diesel films:
+"лице сина закриваємо смайликом, але щоб моє лице не закривало"): `kid_faces.py` lists second faces in
+every used range, then look at strips of the frame edges (a turned head or a cap escapes the detector),
+put the places in a spec for `kid_sticker.py` (a bit larger than the face, clear of the driver's face box,
+moving keys for a peek), point CLIP_SRC at `_kid.mov`, and burn later b-roll and captions into the `_kid`
+copy, never into `_land`. Check a frame of every clip. A clip with the family small in the distance that
+a sticker cannot cover reliably is left out. Start route maps at a public place, never at the
 user's home; do not put other people's faces (children above all) on thumbnails unless asked.
 
 ## Reference files
