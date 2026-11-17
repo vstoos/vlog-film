@@ -1,6 +1,6 @@
 ---
 name: vlog-film
-description: Edit raw trip / car vlog footage (phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail, subtitles in several languages, dubbed audio tracks in the user's cloned voice, vertical Shorts, and the upload to the YouTube channel (video, thumbnail, subtitles, translated titles; "завантаж на ютуб", "upload the subtitles"). Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail, subtitles and dubbing ("озвуч англійською моїм голосом", "dub this into Polish", "there is a pop at 4:25 in the dub"), even when the user does not say "skill" or "montage".
+description: Edit the user's own amateur footage (vlogs, reviews, trips; built on car videos: phone HLG talking-head clips recorded while driving, dash-cam road footage, photos, OBD/Torque screen recordings) into a finished HDR (HLG 10-bit) YouTube film with a teaser, jump cuts on speech, road inserts under music, captions, route map, licence-plate blurring, levelled voice, chapters, thumbnail, subtitles in several languages, dubbed audio tracks in the user's cloned voice, vertical Shorts, and the upload to the YouTube channel (video, thumbnail, subtitles, translated titles; "завантаж на ютуб", "upload the subtitles"). Use this whenever the user wants to edit, cut, assemble or finish a video from footage they shot ("змонтуй відео з поїздки", "make a YouTube video from this folder", "add this clip/photo to the film", "fix the cut at 12:22", "the fragment at 9:15 is too quiet"), for review rounds on a film built this way, and for its YouTube description, chapters, thumbnail, subtitles and dubbing ("озвуч англійською моїм голосом", "dub this into Polish", "there is a pop at 4:25 in the dub"), even when the user does not say "skill" or "montage".
 ---
 
 # Vlog film
@@ -9,6 +9,9 @@ Turn a folder of the user's footage into a finished YouTube film, then iterate o
 user's notes until they are happy. The pipeline was built on "Yaris farewell" (24 min, Ukrainian
 speech, iPhone + Sony dash-cam); `references/example_yaris.py` is that film's complete project
 file, the best guide to what a finished edit looks like.
+Car and trip films are where it was built, not a limit: for other amateur footage (a home vlog, an
+event, a hobby) keep the method (transcripts, cuts on speech, inserts, captions, review rounds) and
+swap what does not apply (dash-cam road inserts become any b-roll, no route map, no plate blur).
 
 ## Before you start
 

@@ -1,24 +1,36 @@
 # vlog-film
 
-An agent skill that edits raw trip and car vlog footage into a finished **HDR (HLG 10-bit) YouTube
-film**: a teaser, jump cuts on speech, dash-cam road inserts under music, photo and still inserts
-with captions, an animated route map, licence-plate blurring, levelled voice, loudness-normalised
-final render, chapters, a thumbnail, face blurring for passers-by, subtitles in several languages, and dubbed
-audio tracks in your own cloned voice with automatic glitch checks. Then it runs review
-rounds: you watch, send notes with times ("12:22 the end of the phrase is cut"), and the agent
-checks the source, fixes the edit and rebuilds.
+An agent skill that turns your own amateur footage (a talking-head vlog, a review, a trip, a family
+event) into a finished **HDR (HLG 10-bit) YouTube film**: a teaser, jump cuts on speech, inserts under
+music (dash-cam road, b-roll, photos and stills with captions), an animated route map, licence-plate
+and face blurring, levelled voice, loudness-normalised final render, chapters, a thumbnail, subtitles
+in several languages, dubbed audio tracks in your own cloned voice with automatic glitch checks,
+vertical Shorts and the upload to YouTube. Then it runs review rounds: you watch, send notes with
+times ("12:22 the end of the phrase is cut"), and the agent checks the source, fixes the edit and
+rebuilds.
+
+The value is less in any one script than in the toolset and the experience written into it: what
+went wrong on real films and how it was fixed (`references/lessons.md`). Car and trip footage is
+where it was built, not a limit: with small changes it fits other amateur video. Ask your agent to
+adapt it to your footage and your channel.
 
 It works with any agent that reads the [Agent Skills](https://agentskills.io) `SKILL.md` format and
 can run shell commands: Claude Code, OpenAI Codex, Hermes Agent and others.
 
-Built on, and tested with, one real film: a 24-minute Ukrainian-language farewell to a 2013 Toyota
-Yaris (iPhone 10-bit HLG clips, Sony dash-cam timelapse, photos, an OBD Torque screen recording).
-`references/example_yaris.py` is that film's complete edit.
+Built on, and used every week for, the films and Shorts of the author's channel
+[VS EV studies](https://www.youtube.com/@VSEVstudies) (Ukrainian, with Polish subtitles and dubs):
+car reviews and pros-and-cons vlogs (a Mercedes GLC after a Tesla:
+[gn_0TBRrO3s](https://youtu.be/gn_0TBRrO3s)), long trips ([z4BJ2E-rEJA](https://youtu.be/z4BJ2E-rEJA)),
+farewell films. Sources: iPhone 10-bit HLG clips, Sony and Tesla dash-cams, photos, phone screen
+recordings. `references/example_yaris.py` is one finished film's complete edit.
 
-> Українською: це скіл для агентів (Claude Code, Codex, Hermes), який монтує відео з поїздок у
-> готовий HDR-фільм для YouTube: тизер, склейки по мовленню, вставки з відеореєстратора під музику,
-> фото з підписами, анімована карта маршруту, розмиття номерів, вирівняна гучність, розділи,
-> обкладинка і субтитри кількома мовами. Встановлення нижче: агент може зробити його сам.
+> Українською: це скіл для агентів (Claude Code, Codex, Hermes), який монтує любительське відео у
+> готовий HDR-фільм для YouTube: тизер, склейки по мовленню, вставки під музику, фото з підписами,
+> карта маршруту, розмиття номерів і облич, вирівняна гучність, розділи, обкладинка, субтитри й
+> озвучка кількома мовами, шортси і завантаження на канал. Зроблено й перевірено на відео каналу
+> [VS EV studies](https://www.youtube.com/@VSEVstudies): огляди авто, влоги, поїздки. Головне в ньому -
+> інструменти й досвід реального монтажу; під своє відео його можна пристосувати невеликими правками.
+> Встановлення нижче: агент може зробити його сам.
 
 ## Maintenance
 
