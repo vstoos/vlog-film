@@ -31,7 +31,7 @@ with no promise of a reply.
 | | Tested with | Why |
 |---|---|---|
 | OS | Windows 11 | macOS / Linux should work with small changes (fonts, encoder), untested |
-| GPU | NVIDIA RTX 3090 (24 GB) | WhisperX speech recognition (CUDA), hevc_nvenc encoding, libplacebo (Vulkan) |
+| GPU | NVIDIA RTX 3090 (24 GB) and RTX 3060 Laptop (6 GB) | WhisperX speech recognition (CUDA), hevc_nvenc encoding, libplacebo (Vulkan); a weaker card or none works too, see below |
 | Python | 3.11 | scripts; a venv with WhisperX, torch (CUDA 12.8), onnxruntime-gpu, OpenCV, pillow-heif |
 | ffmpeg | 9.0 "full" build (gyan.dev) | needs libplacebo, Vulkan, hevc_nvenc or libx265 |
 | Shotcut | 26.x (its `melt`) | the final render of the MLT project; you can also open the project in Shotcut |
@@ -76,6 +76,27 @@ all of them:
 | OpenAI Codex CLI | `~/.codex/skills/vlog-film` |
 | Hermes Agent | `~/.hermes/skills/vlog-film` |
 | others reading SKILL.md | `~/.agents/skills/vlog-film`, or point the agent at `SKILL.md` |
+
+### Weaker hardware
+
+The RTX 3090 is what it was built on, not what it needs. Most of the work is the agent's own: looking
+at contact sheets, reading transcripts, planning the story, writing the edit, captions, description
+and subtitles. That runs on any laptop. What the hardware changes is how long the machine jobs take:
+
+| Job | NVIDIA RTX 3060 / 4060 class (6-12 GB) | AMD Radeon or Intel Arc | No usable GPU (CPU only) |
+|---|---|---|---|
+| Inserts, cards, HDR conversion (ffmpeg + libplacebo) | works (Vulkan) | works (Vulkan) | integrated graphics usually have Vulkan; slower |
+| Encoding | hevc_nvenc, tested on a 3060 Laptop: almost as fast as the 3090 | libx265 on the CPU today; ffmpeg's hevc_amf / hevc_qsv can be added to `vfconfig.hevc_args()` | libx265: several times slower, fine overnight |
+| Speech recognition (WhisperX) | large-v3 fits in 6 GB with `compute_type="int8_float16"` or batch 4-8 | CPU (no CUDA) | CPU, `compute_type="int8"`, model `medium`: hours for an hour of talk |
+| Plate and face blur | works | CPU, slower | CPU, slower |
+| Final render (melt) | NVENC | libx265 | libx265 |
+| Dubbing in your own voice (Higgs TTS 3, 4B) | 9.3 GB of weights, tested on 24 GB: not on 6-8 GB; 12 GB untested | no (CUDA) | no |
+
+Only NVIDIA RTX 3090 and RTX 3060 Laptop are tested. Today `transcribe_all.py` and
+`transcribe_window.py` load WhisperX on CUDA; on a machine without an NVIDIA card ask the agent to
+switch them to `"cpu"` with `compute_type="int8"`, and set `"hevc_encoder": "libx265"` in config.json
+(setup.py does that when it finds no NVIDIA card). The skill tells the agent to adapt the scripts to
+the machine it runs on (SKILL.md, "Before you start").
 
 An agent without skill support can still use it: tell it "read C:/Data/vlog-film/SKILL.md and
 follow it".

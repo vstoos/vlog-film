@@ -17,6 +17,14 @@ file, the best guide to what a finished edit looks like.
   missing tool, run `python <skill>/setup/setup.py` (check only) and show the user what is missing;
   with their OK run `python <skill>/setup/setup.py --install`. Run every script below with the
   Python from config.json (`"python"`), because that is where WhisperX and torch are installed.
+- **The machine.** Built on an RTX 3090, also runs on an RTX 3060 Laptop; weaker or non-NVIDIA
+  hardware works with slower machine jobs (README, "Weaker hardware"). On a new machine check what is
+  there (`nvidia-smi`, `ffmpeg -encoders`, Vulkan in `ffmpeg -init_hw_device vulkan`, RAM, CPU cores)
+  and adapt instead of stopping: no CUDA -> WhisperX on "cpu" with compute_type "int8" (model
+  "medium" if large-v3 is too slow), small VRAM -> "int8_float16" and a smaller batch_size; no NVENC
+  -> "hevc_encoder": "libx265" in config.json (hevc_amf / hevc_qsv need a branch in
+  vfconfig.hevc_args()). Dubbing in the user's voice (Higgs, 9.3 GB of weights, tested on 24 GB) does not fit a
+  6-8 GB card: say so, offer subtitles and YouTube auto-dubbing instead. Tell the user what will be slow and roughly how slow before a long job.
 - **The user.** If `<skill>/user.md` exists, read it: it says who the user is, which language to
   answer in, and their standing preferences. Without it: answer in the user's language, keep
   replies short, name film times as mm:ss for anything they should look at.
