@@ -83,20 +83,29 @@ The RTX 3090 is what it was built on, not what it needs. Most of the work is the
 at contact sheets, reading transcripts, planning the story, writing the edit, captions, description
 and subtitles. That runs on any laptop. What the hardware changes is how long the machine jobs take:
 
-| Job | NVIDIA RTX 3060 / 4060 class (6-12 GB) | AMD Radeon or Intel Arc | No usable GPU (CPU only) |
-|---|---|---|---|
-| Inserts, cards, HDR conversion (ffmpeg + libplacebo) | works (Vulkan) | works (Vulkan) | integrated graphics usually have Vulkan; slower |
-| Encoding | hevc_nvenc, tested on a 3060 Laptop: almost as fast as the 3090 | libx265 on the CPU today; ffmpeg's hevc_amf / hevc_qsv can be added to `vfconfig.hevc_args()` | libx265: several times slower, fine overnight |
-| Speech recognition (WhisperX) | large-v3 fits in 6 GB with `compute_type="int8_float16"` or batch 4-8 | CPU (no CUDA) | CPU, `compute_type="int8"`, model `medium`: hours for an hour of talk |
-| Plate and face blur | works | CPU, slower | CPU, slower |
-| Final render (melt) | NVENC | libx265 | libx265 |
-| Dubbing in your own voice (Higgs TTS 3, 4B) | 9.3 GB of weights, tested on 24 GB: not on 6-8 GB; 12 GB untested | no (CUDA) | no |
+| Job | NVIDIA RTX 3060 / 4060 class (6-12 GB) | AMD Radeon or Intel Arc (8 GB+) | Apple Silicon (M1 and later, 16 GB+) | No usable GPU (CPU only) |
+|---|---|---|---|---|
+| Inserts, cards, HDR conversion (ffmpeg + libplacebo) | works (Vulkan) | works (Vulkan) | libplacebo through MoltenVK, untested | integrated graphics usually have Vulkan; slower |
+| Encoding | hevc_nvenc, tested on a 3060 Laptop: almost as fast as the 3090 | libx265 today; ffmpeg's hevc_amf / hevc_qsv need a branch in `vfconfig.hevc_args()` | hevc_videotoolbox (already in `vfconfig`) | libx265: several times slower, fine overnight |
+| Speech recognition | WhisperX large-v3 fits in 6 GB with `compute_type="int8_float16"` or batch 4-8 | WhisperX (faster-whisper) has no AMD / Intel GPU backend on Windows: CPU, or whisper.cpp with its Vulkan backend on the card (word times coarser, the scripts need adapting) | whisper.cpp (Metal) or mlx-whisper on the GPU; WhisperX on the CPU | WhisperX on the CPU, `compute_type="int8"`, model `medium`: hours for an hour of talk |
+| Plate and face blur | works | CPU, slower | CPU, slower | CPU, slower |
+| Final render (melt) | NVENC | libx265 | hevc_videotoolbox or libx265 | libx265 |
+| Dubbing in your own voice (Higgs TTS 3, 4B, 9.3 GB of weights) | tested on 24 GB; 12 GB may fit in theory (a lower vLLM memory share), 6-8 GB no | vLLM runs on ROCm under Linux only: AMD 16 GB+ in theory | no vLLM on macOS; in theory PyTorch on Metal with enough unified memory | no |
 
-Only NVIDIA RTX 3090 and RTX 3060 Laptop are tested. Today `transcribe_all.py` and
-`transcribe_window.py` load WhisperX on CUDA; on a machine without an NVIDIA card ask the agent to
-switch them to `"cpu"` with `compute_type="int8"`, and set `"hevc_encoder": "libx265"` in config.json
-(setup.py does that when it finds no NVIDIA card). The skill tells the agent to adapt the scripts to
-the machine it runs on (SKILL.md, "Before you start").
+**Tested only on NVIDIA RTX 3090 and RTX 3060 Laptop under Windows 11.** Everything else in the table
+is what the tools support on paper; expect the agent to adapt scripts on the first run.
+
+- Today `transcribe_all.py` and `transcribe_window.py` load WhisperX on CUDA; on a machine without an
+  NVIDIA card ask the agent to switch them to `"cpu"` with `compute_type="int8"` (or to whisper.cpp),
+  and set `"hevc_encoder"` in config.json (`libx265`, or `hevc_videotoolbox` on a Mac; setup.py picks
+  libx265 when it finds no NVIDIA card).
+- Laptop NPUs (Intel, AMD, Qualcomm) are not used by these tools. Apple Silicon is different: its GPU
+  shares the system memory (unified memory), so a Mac with 16-32 GB can run models a 6-8 GB graphics
+  card cannot.
+- melt and Shotcut exist for Windows, macOS and Linux, and the MLT project is plain XML, but this skill
+  has only rendered on Windows: fonts and paths may need fixing elsewhere.
+
+The skill tells the agent to check the machine and adapt the scripts to it (SKILL.md, "Before you start").
 
 An agent without skill support can still use it: tell it "read C:/Data/vlog-film/SKILL.md and
 follow it".
