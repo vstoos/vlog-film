@@ -50,6 +50,9 @@ HOOK = [
 #       absolute path, e.g. a still from make_stills) with slow zoom and a caption band; "" = no caption
 # ("clip", iphone_clip, at_s, len_s, music_key, title, subtitle) silent iPhone footage under music
 # ("anim", sdr_movie, len_s, music_key)                          ready-made SDR animation (route map)
+# Any insert may end with an options dict: {"subscribe": 1.0} burns the animated subscribe banner
+#       (scripts/subscribe.py, Ukrainian + SECOND_LANG) into it from that second; the insert needs about
+#       5 s after it. One per film, on a road insert or stats card (SKILL.md, "Subscribe call").
 # Second language on screen (long films: Ukrainian + Polish). Translations come from subs/onscreen.json
 # ({"<text>": {"pl": ...}}, one entry per line) or CAPTION_TR here. A title alone shows the Polish as a
 # second line; title + subtitle alternate (Ukrainian first, then Polish): give them 6 s or more.

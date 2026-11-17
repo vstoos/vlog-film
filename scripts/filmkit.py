@@ -548,6 +548,10 @@ def build(render_media=True):
                                         min(VOICE_GAIN_MAX, gains[clip] + db)))
                 t_f += fo - fi
             continue
+        # an insert may carry an options dict anywhere after its kind: {"subscribe": 2.0} burns the
+        # animated subscribe banner (subscribe.py) into it from that second
+        opts = next((x for x in item if isinstance(x, dict)), {})
+        item = tuple(x for x in item if not isinstance(x, dict))
         kind = item[0]
         if kind == "roads":
             segs, key, extra = item[1], item[2], ()
@@ -569,6 +573,11 @@ def build(render_media=True):
                 render_clip(name, *segs[0], *extra)
             else:
                 render_road(name, segs, *extra, top=(kind == "end"))
+            if "subscribe" in opts:
+                import subscribe
+                plain = "%s/%s_nosub.mov" % (OUT, name)
+                os.replace("%s/%s.mov" % (OUT, name), plain)
+                subscribe.add(plain, "%s/%s.mov" % (OUT, name), opts["subscribe"], SECOND_LANG)
         len_f = sum(frames(n) for _, _, n in segs)
         video.append('    <entry producer="%s" in="%s" out="%s"/>' % (name, tc(0), tc(len_f - 1)))
         clips.add(("media", name))
@@ -577,7 +586,8 @@ def build(render_media=True):
             spans[-1][2], spans[-1][3] = t_f + len_f, k
         else:
             spans.append([key, t_f, t_f + len_f, k])
-        report.append("%-7s %-22s at %s" % (kind, name, tc(t_f)))
+        report.append("%-7s %-22s at %s%s" % (kind, name, tc(t_f),
+                                               "  + subscribe banner" if "subscribe" in opts else ""))
         t_f += len_f
 
     # music rises under the last words before an insert and fades under the first words after

@@ -12,6 +12,9 @@ spec: {"broll": [[second, length, picture, second in the picture, speed?], ...],
        "mute": [[start, end], ...],          # a tongue click or knock in a pause: silenced, picture untouched
        "arrows": [[[t, x, y], ...], ...],    # an arrow whose tip follows these points (track() makes them);
                                              # {"keys": [...], "side": "left"}: the arrow comes from the upper left
+       "subscribe": [at, ...],              # the animated subscribe banner (subscribe.py) on the speaker's own
+                                             # call: at = clip second of the word "subscribe" (the cursor clicks the
+                                             # button on it), or [that second, second of the word "bell"]
        "lang": "pl", "onscreen": "<project>/subs/onscreen.json"}   # optional: captions in a second language
 Second language: each caption text found in "onscreen" ({"text": {"pl": ...}}) or in "tr" ({"text": "..."})
 is shown in that language too: a title alone with its translation as the second line, a title with a
@@ -253,7 +256,8 @@ def muted(clip, out_wav, mute, floor=0.03, ramp=0.005):
     return out_wav
 
 
-def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arrows=(), tr=None):
+def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arrows=(), tr=None,
+         subscribe=(), lang=None):
     """Write `out`: `clip` with the b-roll and captions burnt in at its own seconds, sound copied (or with
     the `mute` moments silenced, see muted()). arrows: keyframe lists from track(), an arrow whose tip
     follows them (fading in and out). start/length render only that window (a test); the items keep
@@ -284,6 +288,15 @@ def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arr
                      "enable='between(t,%s,%s)'[v%d];" % (prev, i, lerp_expr(keys, 1), ARROW if side == "left" else 0,
                                                            lerp_expr(keys, 2), ARROW, a, b, i))
         prev = "v%d" % i
+    for at in subscribe:
+        import subscribe as sb
+        s, bell = sb.timing(at)
+        if start is not None and not (start - sb.length(bell) < s < start + length):
+            continue
+        i += 1
+        inputs += ["-i", sb.banner(folder, lang, bell=bell)]
+        graph.append(sb.graph(i, s, prev, "v%d" % i, bell))
+        prev = "v%d" % i
     tail = "[%s]" % prev + "".join(caption(folder, "b%d" % k, *c, tr=tr) for k, c in enumerate(captions))
     graph.append(tail + "setpts=PTS-STARTPTS,format=yuv420p10le[out]")
     script = out + "_filter.txt"
@@ -301,4 +314,5 @@ def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arr
 if __name__ == "__main__":
     spec = json.load(open(sys.argv[3], encoding="utf-8"))
     burn(sys.argv[1], sys.argv[2], spec.get("broll", []), spec.get("captions", []), mute=spec.get("mute", []),
-         arrows=spec.get("arrows", []), tr=translations(spec))
+         arrows=spec.get("arrows", []), tr=translations(spec), subscribe=spec.get("subscribe", []),
+         lang=spec.get("lang"))

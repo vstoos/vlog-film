@@ -97,6 +97,23 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
   `references/example_make_route_days.py`; show it over the voice in two halves (below).
 - **Trip numbers** (charge captions, battery % on route legs, summary card): collect and check them
   first, in the project's trip_stats.md, as `references/trip_stats.md` describes.
+- **Subscribe call** (user, 17.11.2026, long films only): never ask the user to record or add a
+  scripted "subscribe" line. Two tools instead:
+  1. *His own call*, where the footage has one: search the transcripts for "підпис" / "subskryb" /
+     "дзвіночок" (examples: "Більшість глядачів ... не підписані на мій канал, тому, будь ласка,
+     підпишіться" diesel-cro IMG_7967 186 s; "Хто хоче не прогавити, підпишіться, натисніть дзвіночок"
+     mercedes IMG_8005 88.7 s). Keep that line in the talk, and burn a road insert (an HLG road piece
+     rendered by filmkit, e.g. `film/road03_*.mov`; a raw SDR dash-cam file looks flat) or a stats card
+     over it as landscape b-roll, with `"subscribe": [[s_word, bell_word]]` in the burn_in spec: the
+     cursor clicks the button on the word "підпишіться" and the bell on "дзвіночок" (one second alone:
+     the bell follows 1.1 s later). Prefer a call that gives a reason ("most viewers are not subscribed")
+     over a list ("підписуйтесь, ставте лайки").
+  2. *No spoken call*: the banner alone on one road insert or stats card, `{"subscribe": 1.0}` at the
+     end of the EDL item, in the second half of the film after a strong moment, not in the first minute.
+  One banner per film. The banner: red pill "ПІДПИСАТИСЯ / Subskrybuj" (SECOND_LANG) slides in at the
+  lower right above the caption band, a cursor clicks it, it turns grey "ВИ ПІДПИСАНІ / Subskrybujesz",
+  the bell rings; about 4.6 s; colours at HLG graphics white. Check a frame: the banner must not cover
+  a caption or the face. Shorts keep their one call to action (the outro), no banner.
 - **On-screen texts in Ukrainian and Polish** (user, 17.11.2026, a standing rule for long films: the
   audience is Ukrainian and Polish, English viewers are few, so no English on screen). Set
   `SECOND_LANG = "pl"` in project.py and put the translations in `<project>/subs/onscreen.json`
