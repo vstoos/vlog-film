@@ -108,6 +108,20 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
   `references/example_make_route_days.py`; show it over the voice in two halves (below).
 - **Trip numbers** (charge captions, battery % on route legs, summary card): collect and check them
   first, in the project's trip_stats.md, as `references/trip_stats.md` describes.
+- **Creative touches** (user, 17.11.2026: "давай креативні речі в навичку"), all in the burn_in spec of
+  the talking clip, so they stay in sync with every cut:
+  - *Punch-in on stressed words*: `"zoom": [[start, end], ...]` enlarges the picture 1.15x around the
+    speaker's face, eased in and out in 0.35 s (`[s, e, 1.25, 0]`: a hard cut zoom). Use it on the
+    punchline of a thought, a surprising number or a verdict ("на 40 хвилин довше", "ніж в стані
+    сп'яніння", "а не автомобіля"), 0.8-5 s from the first stressed word to the end of the phrase; about
+    one per minute of talk, never twice in a row, never under a b-roll or map (it zooms the face only;
+    captions stay put). Diesel-cro short: 9 punch-ins in 12:45.
+  - *Picture-in-picture*: a landscape b-roll with `{"pip": [x, y, w] or "auto"}` starts full frame and
+    shrinks into a box beside the speaker (white edge), then grows back. For a moment where both matter
+    at once: his reaction and what he talks about, or a call to action over the road (below).
+  - Ideas still to try when a film calls for them: a word-timed key-phrase caption (one or two words,
+    large) on a punch-in; a short whoosh under a PiP move; a split screen Mercedes vs Tesla for the same
+    number. Ask the user before a new effect becomes a rule.
 - **Subscribe call** (user, 17.11.2026, long films only): never ask the user to record or add a
   scripted "subscribe" line. Two tools instead:
   1. *His own call*, where the footage has one: search the transcripts for "підпис" / "subskryb" /
@@ -118,7 +132,12 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
      over it as landscape b-roll, with `"subscribe": [[s_word, bell_word]]` in the burn_in spec: the
      cursor clicks the button on the word "підпишіться" and the bell on "дзвіночок" (one second alone:
      the bell follows 1.1 s later). Prefer a call that gives a reason ("most viewers are not subscribed")
-     over a list ("підписуйтесь, ставте лайки").
+     over a list ("підписуйтесь, ставте лайки"). Let the road *shrink into a box beside him* rather than
+     cover him (user, 17.11.2026): the b-roll item gets `{"pip": "auto", "shrink": 1.5, "grow": 0.35}`, so
+     the call opens on the road full frame (no flash of the face at the cut), the road shrinks into an
+     800-px box at the top on the free side of his face, the banner plays beside him, and the box grows
+     back to full frame right at the end of the range, cutting into the next road insert. Start the b-roll
+     0.5 s before the range and give the road piece 1-2 s to spare (a piece that ends early shows the face).
   2. *No spoken call*: the banner alone on one road insert or stats card, `{"subscribe": 1.0}` at the
      end of the EDL item, in the second half of the film after a strong moment, not in the first minute.
   One banner per film. The banner: red pill "ПІДПИСАТИСЯ / Subskrybuj" (SECOND_LANG) slides in at the

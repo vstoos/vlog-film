@@ -95,6 +95,13 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   (several different values), not two identical endpoints; state facts in captions, not causes the
   data does not prove.
 
+- Animated zoom and picture-in-picture (burn_in "zoom", b-roll {"pip"}): ffmpeg's scale cannot change the
+  frame size mid-stream and drawbox does not move per frame, so both go through libplacebo, whose crop_* and
+  pos_* expressions are evaluated every frame with `t` (ffmpeg 8): crop_w='iw/z(t)' for a zoom, pos_x/pos_w
+  on a transparent fill (format=yuva444p10le, fillcolor=black@0) for a box. The PiP edge is a pad of 14 px
+  around the picture that libplacebo crops away at full size and keeps in the box. Pass the HLG tags
+  (colorspace=bt2020nc:color_primaries=bt2020:color_trc=arib-std-b67) so it does not convert colours.
+
 ## Privacy
 
 - Blur licence plates (blur_plates.py: YOLO detector, low threshold, held over 12 frames). Check

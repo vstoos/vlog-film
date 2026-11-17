@@ -7,7 +7,14 @@ speaker's face, which stays in view; a landscape
 one covers the frame.
 
 usage: python burn_in.py <clip.mov> <out.mov> <spec.json>
-spec: {"broll": [[second, length, picture, second in the picture, speed?], ...],
+spec: {"broll": [[second, length, picture, second in the picture, speed?, {options}?], ...],
+                                             # options {"pip": [x, y, w] or "auto", "shrink": 1.2, "grow": 0}:
+                                             # a landscape picture starts full frame, shrinks into a w-wide 16:9
+                                             # box (white edge) after `shrink` s, so the speaker shows beside it,
+                                             # and grows back to full frame `grow` s before its end; "auto" puts a
+                                             # 800-px box at the top on the free side of the face
+       "zoom": [[start, end, factor?], ...],  # punch-in on the speaker's face for an emphasised phrase
+                                             # (default 1.15, eased in and out in 0.35 s; [s, e, f, 0]: hard cut)
        "captions": [[second, length, title, subtitle, "top"?], ...],   # "top": band at the top
        "mute": [[start, end], ...],          # a tongue click or knock in a pause: silenced, picture untouched
        "arrows": [[[t, x, y], ...], ...],    # an arrow whose tip follows these points (track() makes them);
@@ -74,6 +81,78 @@ def face_box(clip, t0, n, samples=3):
         a, b = f[0] * 3, (f[0] + f[2]) * 3
         box = (min(box[0], a), max(box[1], b)) if box else (a, b)
     return box
+
+
+def face_center(clip, t0, n, samples=3):
+    """Centre (x, y, px of a 1920x1080 frame) of the speaker's face over [t0, t0+n], or the frame centre."""
+    det, pts = None, []
+    for t in np.linspace(t0 + 0.1, t0 + max(n, 0.3) - 0.1, samples):
+        raw = subprocess.run([vf.FFMPEG, "-v", "error", "-ss", "%.2f" % t, "-i", clip, "-frames:v", "1",
+                              "-vf", "scale=640:360", "-f", "rawvideo", "-pix_fmt", "bgr24", "-"],
+                             capture_output=True).stdout
+        if len(raw) < 640 * 360 * 3:
+            continue
+        import cv2
+        det = det or cv2.FaceDetectorYN.create(vf.FACE_MODEL, "", (640, 360), 0.6, 0.3, 50)
+        _, fs = det.detect(np.frombuffer(raw, np.uint8).reshape(360, 640, 3))
+        if fs is not None:
+            f = max(fs, key=lambda f: f[2] * f[3])
+            pts.append(((f[0] + f[2] / 2) * 3, (f[1] + f[3] / 2) * 3))
+    return tuple(np.median(np.array(pts), axis=0)) if pts else (W / 2, H / 2)
+
+
+def ease(a, d):
+    """ffmpeg expression: 0 before second a, 1 after a+d, smoothstep between (d=0: a hard step)."""
+    if d <= 0:
+        return "gte(t,%s)" % a
+    u = "clip((t-%s)/%s,0,1)" % (round(a, 3), d)
+    return "(%s*%s*(3-2*%s))" % (u, u, u)
+
+
+PLACEBO = "colorspace=bt2020nc:color_primaries=bt2020:color_trc=arib-std-b67:range=tv"
+ZOOM, ZOOM_EASE = 1.15, 0.35
+
+
+def zoom_filter(clip, zooms, prev, out):
+    """Punch-ins on the face (user 2026-11-17: "on the words we stress, enlarge my face a little, as other
+    bloggers do"): the base picture scaled by `factor` around the face between start and end, eased."""
+    terms, cx, cy = [], [], []
+    for z in zooms:
+        a, b = z[0], z[1]
+        f = z[2] if len(z) > 2 else ZOOM
+        d = z[3] if len(z) > 3 else ZOOM_EASE
+        x, y = face_center(clip, a, b - a)
+        terms.append("%s*(%s-%s)" % (f - 1, ease(a, d), ease(b - d, d)))
+        cx.append((a, b, x)); cy.append((a, b, y))
+    z = "(1+%s)" % "+".join(terms)
+    def pick(vals, mid):
+        e = str(mid)
+        for a, b, v in reversed(vals):
+            e = "if(between(t,%s,%s),%s,%s)" % (a - 0.5, b + 0.5, round(v, 1), e)
+        return e
+    return ("[{p}]libplacebo=w={W}:h={H}:crop_w='iw/{z}':crop_h='ih/{z}':"
+            "crop_x='clip({cx}-cw/2,0,iw-cw)':crop_y='clip({cy}-ch/2,0,ih-ch)':{pl}:format=yuv444p10le[{o}];").format(
+        p=prev, W=W, H=H, z=z, cx=pick(cx, W / 2), cy=pick(cy, H / 2), pl=PLACEBO, o=out)
+
+
+def pip_filter(clip, k, s, n, opt):
+    """Picture k (landscape) shown full frame, shrinking into a box beside the speaker and growing back."""
+    box, shrink, grow, move = opt.get("pip"), opt.get("shrink", 1.2), opt.get("grow", 0.0), opt.get("move", 0.6)
+    if box == "auto" or box is None:
+        fc = face_box(clip, s + shrink, max(0.5, n - shrink - grow))
+        bw = 800
+        left = not fc or fc[0] >= W - fc[1]
+        box = [60 if left else W - 60 - bw, 70, bw]
+    x, y, bw = box
+    bh = round(bw * 9 / 16)
+    p = "(%s-%s)" % (ease(s + shrink, move), ease(s + n - grow - move, move))
+    lerp = lambda full, small: "(%s+(%s)*%s)" % (full, small - full, p)
+    e = 14   # px of edge on the full-size picture: about 6 px around the 800-px box; cropped off at full size
+    q = "(1-%s)" % p
+    return ("[b{k}]pad=iw+{e2}:ih+{e2}:{e}:{e}:color=0xBFBFBF,"
+            "libplacebo=w={W}:h={H}:crop_x='{e}*{q}':crop_y='{e}*{q}':crop_w='iw-{e2}*{q}':crop_h='ih-{e2}*{q}':"
+            "pos_x='{px}':pos_y='{py}':pos_w='{pw}':pos_h='{ph}':fillcolor=black@0:{pl}:format=yuva444p10le[c{k}];").format(
+        k=k, W=W, H=H, e=e, e2=2 * e, q=q, px=lerp(0, x), py=lerp(0, y), pw=lerp(W, bw), ph=lerp(H, bh), pl=PLACEBO)
 
 
 def side_x(clip, t0, n, pic_w):
@@ -171,7 +250,7 @@ def translations(spec):
 def plan(clip, broll):
     """(fades, x) for each b-roll item: portrait ones go beside the face; one that starts where another
     portrait one ends replaces it without fading."""
-    port = [(s, s + n) for s, n, pic, *_ in broll if portrait(pic)]
+    port = [(s, s + n) for s, n, pic, *_ in broll if portrait(pic)]   # (options dicts ride in *_)
     out = []
     for s, n, pic, *_ in broll:
         if not portrait(pic):
@@ -257,7 +336,7 @@ def muted(clip, out_wav, mute, floor=0.03, ramp=0.005):
 
 
 def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arrows=(), tr=None,
-         subscribe=(), lang=None):
+         subscribe=(), lang=None, zoom=()):
     """Write `out`: `clip` with the b-roll and captions burnt in at its own seconds, sound copied (or with
     the `mute` moments silenced, see muted()). arrows: keyframe lists from track(), an arrow whose tip
     follows them (fading in and out). start/length render only that window (a test); the items keep
@@ -266,13 +345,22 @@ def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arr
     cut = ["-ss", str(start), "-t", str(length)] if start is not None else []
     inputs, graph, prev = [*cut, "-i", clip], ["[0:v]format=yuv444p10le,setpts=PTS-STARTPTS+%s/TB[v0];" % (start or 0)], "v0"
     i = 0
-    for (s, n, pic, at, *speed), (fades, x) in zip(broll, plan(clip, broll)):
+    if zoom:
+        graph.append(zoom_filter(clip, zoom, prev, "vz"))
+        prev = "vz"
+    for (s, n, pic, at, *rest), (fades, x) in zip(broll, plan(clip, broll)):
         if start is not None and not (start - n < s < start + length):
             continue
+        opt = rest.pop() if rest and isinstance(rest[-1], dict) else {}
         i += 1   # input number: only the pictures inside the window are inputs
-        args, f = pic_input(i, s, n, pic, at, *speed, fades=fades)
+        args, f = pic_input(i, s, n, pic, at, *rest, fades=fades)
         inputs += args
-        graph += [f, overlay(prev, i, s, n, "v%d" % i, x)]
+        graph.append(f)
+        if "pip" in opt:
+            graph.append(pip_filter(clip, i, s, n, opt))
+            graph.append(overlay(prev, i, s, n, "v%d" % i, x).replace("[b%d]" % i, "[c%d]" % i, 1))
+        else:
+            graph.append(overlay(prev, i, s, n, "v%d" % i, x))
         prev = "v%d" % i
     for k, arrow in enumerate(arrows):
         # a keyframe list from track(), or {"keys": [...], "side": "left"} for an arrow from the upper left
@@ -315,4 +403,4 @@ if __name__ == "__main__":
     spec = json.load(open(sys.argv[3], encoding="utf-8"))
     burn(sys.argv[1], sys.argv[2], spec.get("broll", []), spec.get("captions", []), mute=spec.get("mute", []),
          arrows=spec.get("arrows", []), tr=translations(spec), subscribe=spec.get("subscribe", []),
-         lang=spec.get("lang"))
+         lang=spec.get("lang"), zoom=spec.get("zoom", []))
