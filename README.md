@@ -9,6 +9,14 @@ vertical Shorts and the upload to YouTube. Then it runs review rounds: you watch
 times ("12:22 the end of the phrase is cut"), and the agent checks the source, fixes the edit and
 rebuilds.
 
+**Everything runs on your own computer.** No cloud video editor, no upload of your footage to a
+service to cut it: transcription (WhisperX), plate and face blur, inserts, the edit, the HDR render
+and even the dubbing in your own voice run locally, on your files, with free tools (ffmpeg,
+Shotcut/melt, Python). Your raw clips never leave the machine until you publish the finished film.
+What the agent's model does see: transcripts, small contact sheets of frames it looks at, and the
+texts it writes (descriptions, subtitles), as with any chat with it. Optional exceptions, only when
+you ask for them: an AI-improved thumbnail (Gemini) and the upload to YouTube.
+
 The value is less in any one script than in the toolset and the experience written into it: what
 went wrong on real films and how it was fixed (`references/lessons.md`). Car and trip footage is
 where it was built, not a limit: with small changes it fits other amateur video. Ask your agent to
@@ -30,6 +38,8 @@ recordings. `references/example_yaris.py` is one finished film's complete edit.
 > озвучка кількома мовами, шортси і завантаження на канал. Зроблено й перевірено на відео каналу
 > [VS EV studies](https://www.youtube.com/@VSEVstudies): огляди авто, влоги, поїздки. Головне в ньому -
 > інструменти й досвід реального монтажу; під своє відео його можна пристосувати невеликими правками.
+> Уся обробка відео локальна, на вашому комп'ютері: жодного хмарного відеоредактора, сирі кліпи
+> нікуди не завантажуються. Модель агента бачить лише розшифровки, невеликі аркуші кадрів і тексти.
 > Встановлення нижче: агент може зробити його сам.
 
 ## Maintenance
