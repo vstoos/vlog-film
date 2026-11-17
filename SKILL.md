@@ -97,6 +97,18 @@ answer. The user films unscripted and will not shoot for viewers, so these are e
   `references/example_make_route_days.py`; show it over the voice in two halves (below).
 - **Trip numbers** (charge captions, battery % on route legs, summary card): collect and check them
   first, in the project's trip_stats.md, as `references/trip_stats.md` describes.
+- **On-screen texts in Ukrainian and Polish** (user, 17.11.2026, a standing rule for long films: the
+  audience is Ukrainian and Polish, English viewers are few, so no English on screen). Set
+  `SECOND_LANG = "pl"` in project.py and put the translations in `<project>/subs/onscreen.json`
+  (`{"<text>": {"pl": ...}}`, the same file onscreen_subs.py reads; or `CAPTION_TR` in project.py).
+  filmkit then shows every card, title, end card and caption in both: a title alone gets the Polish as
+  its second, smaller line; a title with a subtitle shows the Ukrainian pair first and the Polish pair
+  after it, crossfading half way, so give such an insert 6 s or more (filmkit warns below `ALT_MIN`).
+  burn_in.py does the same with spec `"lang": "pl", "onscreen": "<project>/subs/onscreen.json"`.
+  filmkit prints every on-screen text that has no translation. Place and stop names go in their local
+  Latin spelling in both languages (Gdańsk, Katowice Airport, Starogard), on maps too; route-map pins
+  take the Polish comment as `sub2` (`references/example_make_route.py`). The `.pl.srt` then gets no
+  on-screen cues (they are on screen already); other subtitle languages still do.
 - **Pictures over the voice** (b-roll, phone screenshots, captions while the speaker goes on talking):
   burn them into the talking clip with `burn_in.py`, before filmkit (it shows a talking clip only while
   it talks). A portrait picture (screenshot, vertical clip, portrait photo) stands at full frame height

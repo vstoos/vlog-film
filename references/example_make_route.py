@@ -31,11 +31,12 @@ FONT_B = "C:/Windows/Fonts/segoeuib.ttf"
 FONT_R = "C:/Windows/Fonts/segoeui.ttf"
 FONT_L = "C:/Windows/Fonts/segoeuil.ttf"
 
-# (name, lat, lon, side): towns on the route get their name on the left, away from the line
-CITIES = [("Гданськ", 54.352, 18.646, "r"), ("Старогард-Гданський", 53.966, 18.530, "l"),
-          ("Бидгощ", 53.123, 18.008, "l"), ("Торунь", 53.013, 18.598, "l"), ("Варшава", 52.230, 21.012, "r"),
-          ("Лодзь", 51.759, 19.456, "l"), ("Ченстохова", 50.811, 19.120, "r"), ("Катовіце", 50.264, 19.023, "r"),
-          ("Познань", 52.406, 16.925, "r")]
+# (name, lat, lon, side): towns on the route get their name on the left, away from the line.
+# Place names in the local Latin spelling (user, 17.11.2026): Ukrainian and Polish viewers both read them.
+CITIES = [("Gdańsk", 54.352, 18.646, "r"), ("Starogard Gdański", 53.966, 18.530, "l"),
+          ("Bydgoszcz", 53.123, 18.008, "l"), ("Toruń", 53.013, 18.598, "l"), ("Warszawa", 52.230, 21.012, "r"),
+          ("Łódź", 51.759, 19.456, "l"), ("Częstochowa", 50.811, 19.120, "r"), ("Katowice", 50.264, 19.023, "r"),
+          ("Poznań", 52.406, 16.925, "r")]
 
 
 def world(lat, lon):
@@ -163,16 +164,20 @@ class Overlay:
         return out.astype(np.uint8)
 
 
-def pin_label(x, y, title, sub, side="right"):
-    fb, fr = ImageFont.truetype(FONT_B, 30), ImageFont.truetype(FONT_R, 25)
+def pin_label(x, y, title, sub, side="right", sub2=""):
+    """Label box at a pin: title (place in Latin spelling, time), comment, and sub2, the comment in the
+    second language (Polish), smaller and greyer under it."""
+    fb, fr, fs = ImageFont.truetype(FONT_B, 30), ImageFont.truetype(FONT_R, 25), ImageFont.truetype(FONT_R, 23)
 
     def draw(d):
-        tw = max(d.textlength(title, font=fb), d.textlength(sub, font=fr))
+        tw = max(d.textlength(title, font=fb), d.textlength(sub, font=fr), d.textlength(sub2, font=fs))
         bx = x + 26 if side == "right" else x - 26 - tw - 28
         by = y - 40
-        d.rounded_rectangle((bx, by, bx + tw + 28, by + 82), 12, fill=(15, 15, 15, 200))
+        d.rounded_rectangle((bx, by, bx + tw + 28, by + (114 if sub2 else 82)), 12, fill=(15, 15, 15, 200))
         d.text((bx + 14, by + 6), title, font=fb, fill=(255, 255, 255, 255))
         d.text((bx + 14, by + 44), sub, font=fr, fill=(215, 215, 215, 255))
+        if sub2:
+            d.text((bx + 14, by + 78), sub2, font=fs, fill=(175, 175, 175, 255))
     return draw
 
 
@@ -224,9 +229,10 @@ def outbound(base):
     sx, sy = screen(53.958, 18.5417)
     ox, oy = screen(51.1077, 19.3889)
     ax, ay = screen(50.4708, 19.0723)
-    ov.add(pin_label(sx, sy, "Старт · 13:17", "заправка в Старогарді"), 0.6)
-    ov.add(pin_label(ox, oy, "Orlen · 16:33", "357 км від дому, 32,24 л"), t_stop)
-    ov.add(pin_label(ax, ay, "Аеропорт Катовіце · 17:45", "Яріс передаємо водію до Сум", "left"), t_end - 0.2)
+    ov.add(pin_label(sx, sy, "Starogard · 13:17", "заправка, старт", sub2="stacja, start"), 0.6)
+    ov.add(pin_label(ox, oy, "Orlen · 16:33", "357 км від дому, 32,24 л", sub2="357 km od domu, 32,24 l"), t_stop)
+    ov.add(pin_label(ax, ay, "Katowice Airport · 17:45", "Яріс передаємо водію до Сум", "left",
+                     sub2="przekazujemy Yarisa kierowcy do Sum"), t_end - 0.2)
 
     def gen():
         for f in range(n):
@@ -266,10 +272,12 @@ def inbound(base):
     nx, ny = screen(53.7407, 18.6394)
     hx, hy = screen(53.958, 18.5417)
     gx, gy = screen(54.3810, 18.4692)
-    ov.add(pin_label(kx, ky, "Катовіце · 18:30", "беру Yaris Hybrid в оренду", "left"), 0.6)
-    ov.add(pin_label(nx, ny, "Orlen · 23:28", "нічна заправка, 28,84 л"), t_stop)
-    ov.add(pin_label(hx, hy, "Старогард · 00:01", "вдома опівночі", "left"), t_home - 0.2, t_c + 0.3)
-    ov.add(pin_label(gx, gy, "Аеропорт Гданськ · 17:21", "долив 6,15 л і здаю машину", "left"), t_end - 0.2)
+    ov.add(pin_label(kx, ky, "Katowice · 18:30", "беру Yaris Hybrid в оренду", "left",
+                       sub2="wynajmuję Yarisa Hybrid"), 0.6)
+    ov.add(pin_label(nx, ny, "Orlen · 23:28", "нічна заправка, 28,84 л", sub2="nocne tankowanie, 28,84 l"), t_stop)
+    ov.add(pin_label(hx, hy, "Starogard · 00:01", "вдома опівночі", "left", sub2="w domu o północy"), t_home - 0.2, t_c + 0.3)
+    ov.add(pin_label(gx, gy, "Gdańsk Airport · 17:21", "долив 6,15 л і здаю машину", "left",
+                       sub2="dolewam 6,15 l i oddaję auto"), t_end - 0.2)
 
     def gen():
         for f in range(n):

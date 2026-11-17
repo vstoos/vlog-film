@@ -44,6 +44,11 @@ CLIP_FRAME, CLIP_SPEED, PORTRAIT_BAND = {}, {}, {}
 CLIP_SRC = {}   # clip -> landscape picture file used as is: no plate blur, no portrait handling (TeslaCam, burn_in output)
 HOOK, EDL, MUSIC = [], [], {}
 MAKE_STILLS = None
+SECOND_LANG = None   # e.g. "pl": every caption, card and title is shown in the film's language and in this one
+CAPTION_TR = {}      # text -> translation in SECOND_LANG; else taken from <project>/subs/onscreen.json
+ALT_MIN = 6.0        # s: a caption that alternates languages needs about 3 s per language
+PROJECT_DIR = None
+_TR = None
 
 
 FB = vf.ff_font(vf.FONT_BOLD)   # drawtext font; light faded on road footage
@@ -58,6 +63,7 @@ def configure(path):
     """Load the project file and take over its settings (UPPER_CASE), roll_for and make_stills."""
     spec = importlib.util.spec_from_file_location("project", path)
     proj = importlib.util.module_from_spec(spec)
+    globals()["PROJECT_DIR"] = os.path.dirname(os.path.abspath(path))
     spec.loader.exec_module(proj)
     g = globals()
     for k, v in vars(proj).items():
@@ -83,6 +89,47 @@ def fit_size(text, size, width=1920 - 2 * 100):
     return size if w <= width else int(size * width / w)
 
 
+def tr(text):
+    """The SECOND_LANG version of an on-screen text, or "" when there is none (or no SECOND_LANG).
+    Looks in CAPTION_TR, then in <project>/subs/onscreen.json ({"text": {"pl": ...}}, the same file
+    onscreen_subs.py turns into subtitle cues). Multi-line texts are looked up line by line."""
+    global _TR
+    if not SECOND_LANG or not text:
+        return ""
+    if _TR is None:
+        _TR = {}
+        f = os.path.join(PROJECT_DIR or ".", "subs", "onscreen.json")
+        if os.path.exists(f):
+            for k, v in json.load(open(f, encoding="utf-8")).items():
+                if isinstance(v, dict) and v.get(SECOND_LANG):
+                    _TR[k] = v[SECOND_LANG]
+        _TR.update(CAPTION_TR)
+    if text in _TR:
+        return _TR[text]
+    lines = text.split("\n")
+    if len(lines) > 1 and all(l in _TR or not l.strip() for l in lines):
+        return "\n".join(_TR.get(l, l) for l in lines)
+    if not text.isascii():
+        print("  no %s translation for on-screen text: %r" % (SECOND_LANG, text))
+    return ""
+
+
+def _ramp(a, b, c, d):
+    """alpha 0 before a, rising to 1 at b, 1 until c, falling to 0 at d (ffmpeg expression)."""
+    return ("if(lt(t,{a}),0,if(lt(t,{b}),(t-{a})/{r1},if(lt(t,{c}),1,if(lt(t,{d}),({d}-t)/{r2},0))))"
+            .format(a=round(a, 3), b=round(b, 3), c=round(c, 3), d=round(d, 3),
+                    r1=round(max(b - a, 0.01), 3), r2=round(max(d - c, 0.01), 3)))
+
+
+def _phases(a, b, c, d, two):
+    """Fade ramps for the first and the second language. One language: the whole [a, d].
+    Two languages in turn: the first [a, mid], the second [mid, d], crossfading over 0.4 s."""
+    if not two:
+        return [(a, b, c, d)]
+    m = (b + c) / 2
+    return [(a, b, m - 0.2, m + 0.2), (m - 0.2, m + 0.2, c, d)]
+
+
 def render_road(name, segs, title=None, sub=None, top=False):
     """Road footage levelled and SDR->HLG. Cards get blur, vignette and fading text."""
     rot = roll_for(segs[0][0])
@@ -94,25 +141,34 @@ def render_road(name, segs, title=None, sub=None, top=False):
              "rotate=%s*PI/180:bilinear=1,scale=iw*%.4f:ih*%.4f:flags=lanczos,crop=1920:1080,setsar=1,"
              % (rot, zoom_for(rot), zoom_for(rot)))
     if title:
-        subs = sub.split("\n")       # each subtitle line centred on its own
-        for fname, text in [("t", title)] + [("s%d" % i, s) for i, s in enumerate(subs)]:
-            with open("%s/%s_%s.txt" % (OUT, name, fname), "w", encoding="utf-8") as f:
-                f.write(text)
-        alpha = "if(lt(t,{a}),0,if(lt(t,{b}),(t-{a}),if(lt(t,{c}),1,if(lt(t,{d}),({d}-t),0))))"
+        langs = [(title, sub or "")]
+        if tr(title) or tr(sub):
+            langs.append((tr(title) or title, tr(sub) or sub or ""))
+            if length < ALT_MIN:
+                print("  card %s: %.1f s is short for two languages in turn (%.0f s or more reads well)"
+                      % (name, length, ALT_MIN))
         esc = OUT.replace(":", "\\:")
         y_t, y_s = ("110", "270") if top else ("(h-text_h)/2-50", "(h/2)+70")   # top: end screen tiles below
-        asub = alpha.format(a=1.6, b=2.6, c=length - 1.5, d=length - 0.5)
-        chain += (
-            "gblur=sigma=3,eq=brightness=-0.08:saturation=0.85,vignette=PI/4,"
-            "drawtext=fontfile='{fb}':textfile='{e}/{n}_t.txt':fontsize={fs}:"
-            "fontcolor=white:alpha='{am}':x=(w-text_w)/2:y={yt}:shadowcolor=black@0.6:shadowx=3:shadowy=3,"
-        ).format(fb=FB, e=esc, n=name, yt=y_t, fs=fit_size(title, 120),
-                 am=alpha.format(a=0.8, b=1.8, c=length - 1.5, d=length - 0.5))
-        for i in range(len(subs)):
+        chain += "gblur=sigma=3,eq=brightness=-0.08:saturation=0.85,vignette=PI/4,"
+        pt = _phases(0.8, 1.8, length - 1.5, length - 0.5, len(langs) > 1)
+        if len(langs) > 1:   # the subtitle comes in 0.8 s after the title, then switches language with it
+            ps = [(1.6, 2.6, pt[0][2], pt[0][3]), pt[1]]
+        else:
+            ps = [(1.6, 2.6, length - 1.5, length - 0.5)]
+        for k, (tt, ss) in enumerate(langs):
+            subs = ss.split("\n") if ss else []    # each subtitle line centred on its own
+            for fname, text in [("t%d" % k, tt)] + [("s%d_%d" % (k, i), s) for i, s in enumerate(subs)]:
+                with open("%s/%s_%s.txt" % (OUT, name, fname), "w", encoding="utf-8") as f:
+                    f.write(text)
             chain += (
-                "drawtext=fontfile='{fb}':textfile='{e}/{n}_s{i}.txt':fontsize=50:"     # bold: light faded on road footage
-                "fontcolor=white:alpha='{a}':x=(w-text_w)/2:y={ys}+{dy}:shadowcolor=black@0.8:shadowx=3:shadowy=3,"
-            ).format(fb=FB, e=esc, n=name, i=i, a=asub, ys=y_s, dy=i * 70)
+                "drawtext=fontfile='{fb}':textfile='{e}/{n}_t{k}.txt':expansion=none:fontsize={fs}:"
+                "fontcolor=white:alpha='{am}':x=(w-text_w)/2:y={yt}:shadowcolor=black@0.6:shadowx=3:shadowy=3,"
+            ).format(fb=FB, e=esc, n=name, k=k, yt=y_t, fs=fit_size(tt, 120), am=_ramp(*pt[k]))
+            for i in range(len(subs)):
+                chain += (
+                    "drawtext=fontfile='{fb}':textfile='{e}/{n}_s{k}_{i}.txt':expansion=none:fontsize=50:"     # bold: light faded on road footage
+                    "fontcolor=white:alpha='{a}':x=(w-text_w)/2:y={ys}+{dy}:shadowcolor=black@0.8:shadowx=3:shadowy=3,"
+                ).format(fb=FB, e=esc, n=name, k=k, i=i, a=_ramp(*ps[k]), ys=y_s, dy=i * 70)
         chain += "fade=t=in:st=0:d=0.5,fade=t=out:st=%s:d=0.5," % (length - 0.5)
         # SDR white -> HLG graphics white, so text does not blaze at peak
         chain += "libplacebo=colorspace=bt2020nc:color_primaries=bt2020:color_trc=arib-std-b67:range=tv:format=yuv420p10le"
@@ -137,23 +193,44 @@ def caption_chain(name, length, title, sub, white="white"):
 
     white: SDR sources use white (graphics white after SDR->HLG); HLG sources need ~75%
     signal (0xBFBFBF) so the text sits at reference white instead of blazing at peak.
+
+    With SECOND_LANG and a translation (tr()): a title alone gets its translation as the second,
+    smaller line, both at once; a title with a subtitle shows the film's language first and then
+    the translation, crossfading half way, because both pairs do not fit the band at once.
     """
     if not title:
         return ""
-    for fname, text in (("t", title), ("s", sub)):
-        with open("%s/%s_%s.txt" % (OUT, name, fname), "w", encoding="utf-8") as f:
-            f.write(text)
+    t_tr, s_tr = tr(title), tr(sub)
+    if not sub and t_tr:
+        pairs = [(title, t_tr)]                               # stacked: two languages at once
+    elif t_tr or s_tr:
+        pairs = [(title, sub), (t_tr or title, s_tr or sub)]  # in turn
+        if length < ALT_MIN:
+            print("  caption %s: %.1f s is short for two languages in turn (%.0f s or more reads well)"
+                  % (name, length, ALT_MIN))
+    else:
+        pairs = [(title, sub)]
     esc = OUT.replace(":", "\\:")
-    alpha = "if(lt(t,{a}),0,if(lt(t,{b}),(t-{a})/0.6,if(lt(t,{c}),1,if(lt(t,{d}),({d}-t)/0.6,0))))"
-    return (
-        "drawbox=x=0:y=ih-230:w=iw:h=230:color=black@0.6:t=fill,"
-        "drawtext=fontfile='{fb}':textfile='{e}/{nm}_t.txt':expansion=none:fontsize=64:"
-        "fontcolor={w}:alpha='{a1}':x=(w-text_w)/2:y=h-200:shadowcolor=black@0.6:shadowx=2:shadowy=2,"
-        "drawtext=fontfile='{fb}':textfile='{e}/{nm}_s.txt':expansion=none:fontsize=48:"
-        "fontcolor={w}:alpha='{a2}':x=(w-text_w)/2:y=h-110:shadowcolor=black@0.6:shadowx=2:shadowy=2,"
-    ).format(fb=FB, e=esc, nm=name, w=white,
-             a1=alpha.format(a=0.4, b=1.0, c=length - 1.0, d=length - 0.4),
-             a2=alpha.format(a=0.8, b=1.4, c=length - 1.0, d=length - 0.4))
+    pt = _phases(0.4, 1.0, length - 1.0, length - 0.4, len(pairs) > 1)
+    if len(pairs) > 1:
+        ps = [(0.8, 1.4, pt[0][2], pt[0][3]), pt[1]]
+    else:
+        ps = [(0.8, 1.4, length - 1.0, length - 0.4)]
+    out = "drawbox=x=0:y=ih-230:w=iw:h=230:color=black@0.6:t=fill,"
+    for k, (tt, ss) in enumerate(pairs):
+        for fname, text in (("t%d" % k, tt), ("s%d" % k, ss or "")):
+            with open("%s/%s_%s.txt" % (OUT, name, fname), "w", encoding="utf-8") as f:
+                f.write(text)
+        out += (
+            "drawtext=fontfile='{fb}':textfile='{e}/{nm}_t{k}.txt':expansion=none:fontsize={f1}:"
+            "fontcolor={w}:alpha='{a1}':x=(w-text_w)/2:y=h-200:shadowcolor=black@0.6:shadowx=2:shadowy=2,"
+        ).format(fb=FB, e=esc, nm=name, k=k, w=white, f1=fit_size(tt, 64), a1=_ramp(*pt[k]))
+        if ss:
+            out += (
+                "drawtext=fontfile='{fb}':textfile='{e}/{nm}_s{k}.txt':expansion=none:fontsize={f2}:"
+                "fontcolor={w}:alpha='{a2}':x=(w-text_w)/2:y=h-110:shadowcolor=black@0.6:shadowx=2:shadowy=2,"
+            ).format(fb=FB, e=esc, nm=name, k=k, w=white, f2=fit_size(ss, 48), a2=_ramp(*ps[k]))
+    return out
 
 
 # portrait clips whose subject sits in one part of the frame: cut that part out instead of pillarboxing

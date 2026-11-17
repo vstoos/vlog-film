@@ -50,6 +50,12 @@ HOOK = [
 #       absolute path, e.g. a still from make_stills) with slow zoom and a caption band; "" = no caption
 # ("clip", iphone_clip, at_s, len_s, music_key, title, subtitle) silent iPhone footage under music
 # ("anim", sdr_movie, len_s, music_key)                          ready-made SDR animation (route map)
+# Second language on screen (long films: Ukrainian + Polish). Translations come from subs/onscreen.json
+# ({"<text>": {"pl": ...}}, one entry per line) or CAPTION_TR here. A title alone shows the Polish as a
+# second line; title + subtitle alternate (Ukrainian first, then Polish): give them 6 s or more.
+# Write place names in Latin spelling in both languages ("Аеропорт Katowice", "Lotnisko Katowice").
+SECOND_LANG = "pl"
+CAPTION_TR = {}
 EDL = [
     ("talk", [(c, a, b, "keep") for c, a, b in HOOK]),
     # ("card", "MAH04459", 60.0, 8.0, "p1", "Title", "subtitle"),

@@ -10,8 +10,12 @@ usage: python burn_in.py <clip.mov> <out.mov> <spec.json>
 spec: {"broll": [[second, length, picture, second in the picture, speed?], ...],
        "captions": [[second, length, title, subtitle, "top"?], ...],   # "top": band at the top
        "mute": [[start, end], ...],          # a tongue click or knock in a pause: silenced, picture untouched
-       "arrows": [[[t, x, y], ...], ...]}    # an arrow whose tip follows these points (track() makes them);
+       "arrows": [[[t, x, y], ...], ...],    # an arrow whose tip follows these points (track() makes them);
                                              # {"keys": [...], "side": "left"}: the arrow comes from the upper left
+       "lang": "pl", "onscreen": "<project>/subs/onscreen.json"}   # optional: captions in a second language
+Second language: each caption text found in "onscreen" ({"text": {"pl": ...}}) or in "tr" ({"text": "..."})
+is shown in that language too: a title alone with its translation as the second line, a title with a
+subtitle in turn (the film's language first, then the translation), as filmkit does.
 From a project script: import burn_in; burn_in.burn(clip, out, broll, captions).
 """
 import json
@@ -115,20 +119,50 @@ def text_file(folder, name, text):
     return path.replace(":", "\\:")
 
 
-def caption(folder, name, t0, n, title, sub, where="bottom", white="0xBFBFBF"):
+def caption(folder, name, t0, n, title, sub, where="bottom", white="0xBFBFBF", tr=None):
     """Band, title and subtitle between t0 and t0+n, on the absolute time of the stream. where="top" puts
-    the band at the top of the frame, for a picture whose subject sits low (an arrow pointing there)."""
-    alpha = "if(lt(t,{a}),0,if(lt(t,{b}),(t-{a})/0.5,if(lt(t,{c}),1,if(lt(t,{d}),({d}-t)/0.5,0))))".format(
-        a=t0, b=t0 + 0.5, c=t0 + n - 0.5, d=t0 + n)
-    en = "between(t,%s,%s)" % (t0, t0 + n)
+    the band at the top of the frame, for a picture whose subject sits low (an arrow pointing there).
+    tr: {text: translation}; a title alone gets its translation as the second line, a title with a
+    subtitle switches to the translated pair half way."""
+    tr = tr or {}
+    t_tr, s_tr = tr.get(title, ""), tr.get(sub, "") if sub else ""
+    if not sub and t_tr:
+        pairs, spans = [(title, t_tr)], [(t0, t0 + n)]
+    elif t_tr or s_tr:
+        m = t0 + n / 2
+        pairs, spans = [(title, sub), (t_tr or title, s_tr or sub)], [(t0, m + 0.2), (m - 0.2, t0 + n)]
+        if n < 6:
+            print("  caption at %.1f s: %.1f s is short for two languages in turn" % (t0, n))
+    else:
+        pairs, spans = [(title, sub)], [(t0, t0 + n)]
     band, yt, ys = ("0", "30", "120") if where == "top" else ("ih-230", "h-200", "h-110")
-    return ("drawbox=x=0:y={band}:w=iw:h=230:color=black@0.6:t=fill:enable='{en}',"
-            "drawtext=fontfile='{fb}':textfile='{tt}':expansion=none:fontsize=60:fontcolor={w}:alpha='{a}':"
-            "x=(w-text_w)/2:y={yt}:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',"
-            "drawtext=fontfile='{fb}':textfile='{ts}':expansion=none:fontsize=46:fontcolor={w}:alpha='{a}':"
-            "x=(w-text_w)/2:y={ys}:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',").format(
-        en=en, fb=vf.ff_font(vf.FONT_BOLD), tt=text_file(folder, name + "t", title),
-        ts=text_file(folder, name + "s", sub), w=white, a=alpha, band=band, yt=yt, ys=ys)
+    out = "drawbox=x=0:y={band}:w=iw:h=230:color=black@0.6:t=fill:enable='between(t,{a},{b})',".format(
+        band=band, a=t0, b=t0 + n)
+    for k, ((tt, ss), (a, b)) in enumerate(zip(pairs, spans)):
+        r1 = 0.5 if a == t0 else 0.4         # the crossfade between languages is quicker
+        r2 = 0.5 if b == t0 + n else 0.4
+        alpha = "if(lt(t,{a}),0,if(lt(t,{b}),(t-{a})/{r1},if(lt(t,{c}),1,if(lt(t,{d}),({d}-t)/{r2},0))))".format(
+            a=round(a, 3), b=round(a + r1, 3), c=round(b - r2, 3), d=round(b, 3), r1=r1, r2=r2)
+        en = "between(t,%s,%s)" % (round(a, 3), round(b, 3))
+        out += ("drawtext=fontfile='{fb}':textfile='{tt}':expansion=none:fontsize=60:fontcolor={w}:alpha='{al}':"
+                "x=(w-text_w)/2:y={yt}:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',").format(
+            en=en, fb=vf.ff_font(vf.FONT_BOLD), tt=text_file(folder, "%st%d" % (name, k), tt), w=white, al=alpha, yt=yt)
+        if ss:
+            out += ("drawtext=fontfile='{fb}':textfile='{ts}':expansion=none:fontsize=46:fontcolor={w}:alpha='{al}':"
+                    "x=(w-text_w)/2:y={ys}:shadowcolor=black@0.6:shadowx=2:shadowy=2:enable='{en}',").format(
+                en=en, fb=vf.ff_font(vf.FONT_BOLD), ts=text_file(folder, "%ss%d" % (name, k), ss), w=white, al=alpha, ys=ys)
+    return out
+
+
+def translations(spec):
+    """{text: translation} from spec "lang" + "onscreen" (the project's subs/onscreen.json) and spec "tr"."""
+    out, lang = {}, spec.get("lang")
+    if lang and spec.get("onscreen"):
+        for k, v in json.load(open(spec["onscreen"], encoding="utf-8")).items():
+            if isinstance(v, dict) and v.get(lang):
+                out[k] = v[lang]
+    out.update(spec.get("tr", {}))
+    return out
 
 
 def plan(clip, broll):
@@ -219,7 +253,7 @@ def muted(clip, out_wav, mute, floor=0.03, ramp=0.005):
     return out_wav
 
 
-def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arrows=()):
+def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arrows=(), tr=None):
     """Write `out`: `clip` with the b-roll and captions burnt in at its own seconds, sound copied (or with
     the `mute` moments silenced, see muted()). arrows: keyframe lists from track(), an arrow whose tip
     follows them (fading in and out). start/length render only that window (a test); the items keep
@@ -250,7 +284,7 @@ def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arr
                      "enable='between(t,%s,%s)'[v%d];" % (prev, i, lerp_expr(keys, 1), ARROW if side == "left" else 0,
                                                            lerp_expr(keys, 2), ARROW, a, b, i))
         prev = "v%d" % i
-    tail = "[%s]" % prev + "".join(caption(folder, "b%d" % k, *c) for k, c in enumerate(captions))
+    tail = "[%s]" % prev + "".join(caption(folder, "b%d" % k, *c, tr=tr) for k, c in enumerate(captions))
     graph.append(tail + "setpts=PTS-STARTPTS,format=yuv420p10le[out]")
     script = out + "_filter.txt"
     with open(script, "w", encoding="utf-8") as f:
@@ -267,4 +301,4 @@ def burn(clip, out, broll=(), captions=(), start=None, length=None, mute=(), arr
 if __name__ == "__main__":
     spec = json.load(open(sys.argv[3], encoding="utf-8"))
     burn(sys.argv[1], sys.argv[2], spec.get("broll", []), spec.get("captions", []), mute=spec.get("mute", []),
-         arrows=spec.get("arrows", []))
+         arrows=spec.get("arrows", []), tr=translations(spec))

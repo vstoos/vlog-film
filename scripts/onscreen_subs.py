@@ -16,7 +16,8 @@ onscreen() in project.py returning [(clip, from_s, to_s, [lines])] for captions 
 its own seconds (burn_in.py captions, captions baked into voice-over clips); they are mapped through
 every cut of that clip in film/<FILM_NAME>.mlt. Translations: <project>/subs/onscreen.json,
 {"<text>": {"en": "...", "pl": "..."}}, one entry per line of text ("" drops a line, e.g. the
-Polish line of a bilingual caption). dub.py reads its manifest, not
+Polish line of a bilingual caption). A project with SECOND_LANG = "pl" shows the Polish texts on
+screen (filmkit, burn_in), so the .pl.srt gets no on-screen cues: only the other languages do. dub.py reads its manifest, not
 these files, so the cues are never spoken.
 """
 import importlib.util
@@ -100,7 +101,13 @@ def main():
         if not os.path.exists(keep):
             shutil.copy(path, keep)
         cues = parse(keep)
-        for s, e, lines, sp in items:
+        if lang == getattr(pr, "SECOND_LANG", None):
+            # filmkit / burn_in already show every translated text on screen in this language
+            print(lang, "is on screen (SECOND_LANG): no on-screen cues added")
+            items_lang = []
+        else:
+            items_lang = items
+        for s, e, lines, sp in items_lang:
             t = [tr[x][lang] for x in lines if tr[x][lang]]     # "" drops a line already in that language
             cues.append((s, e, "[%s]" % " - ".join(t) if sp else "\n".join(t)))
         cues.sort(key=lambda c: c[0])
