@@ -17,6 +17,9 @@ Usage examples (PowerShell or git-bash):
         --publish-at 2026-11-20T18:00:00Z to schedule).
 
     python yt_upload.py captions VIDEO_ID --sub pl=film.pl.srt
+    python yt_upload.py tracks [VIDEO_ID ...] [--last 10]
+        Read only: subtitle languages per video; flags a language listed twice, mostly an automatic
+        track YouTube added next to ours (also from a dubbed audio track). Run it a day after upload.
     python yt_upload.py thumb VIDEO_ID thumb.jpg
     python yt_upload.py loc VIDEO_ID --loc en="Title EN|desc.en.txt"
 
@@ -211,14 +214,74 @@ def do_thumb(yt, video_id, thumb):
     log(f"  thumbnail set: {thumb}")
 
 
+def base_lang(code):
+    """'en-US' -> 'en': Studio shows en and en-US as two separate English entries."""
+    return (code or "").split("-")[0].lower()
+
+
+def list_tracks(yt, video_id):
+    """Subtitle tracks on a video: [(id, language, kind)], kind 'standard' (ours) or 'asr' (YouTube's own)."""
+    items = yt.captions().list(part="snippet", videoId=video_id).execute().get("items", [])
+    return [(c["id"], c["snippet"]["language"], c["snippet"]["trackKind"].lower()) for c in items]
+
+
+def track_problems(tracks, audio_lang=""):
+    """Duplicate languages on one video, as lines to show the user:
+    - an automatic (asr) track in a language other than the video's own audio language (`audio_lang`),
+      next to our subtitles in that language. YouTube makes it by itself from a dubbed audio track
+      minutes after our upload (GLC Short, 14.11.2026: a second Polish; Yaris S2: en next to our en-US),
+      and Studio then lists that language twice. The automatic track in the video's own language is
+      normal (every video has one) and is not flagged. The API cannot remove them (this tool never
+      deletes): hide them in Studio -> Subtitles -> the auto track -> Unpublish.
+    - two of our own tracks in one language (pl and pl-PL, en and en-US)."""
+    ours = {}
+    for _, lang, kind in tracks:
+        if kind != "asr":
+            ours.setdefault(base_lang(lang), []).append(lang)
+    out = []
+    for _, lang, kind in tracks:
+        if kind == "asr" and base_lang(lang) in ours and base_lang(lang) != base_lang(audio_lang):
+            out.append(f"{lang}: YouTube added automatic subtitles next to ours ({', '.join(ours[base_lang(lang)])}); "
+                       f"Studio -> Subtitles -> {lang} 'Automatic' -> Unpublish")
+    for b, langs in ours.items():
+        if len(langs) > 1:
+            out.append(f"{b}: our subtitles twice ({', '.join(langs)}); keep one in Studio")
+    return out
+
+
 def do_captions(yt, video_id, subs):
+    """Add our subtitles. A language that already has our track is updated in place, not added a second
+    time; automatic tracks are reported after the upload (see track_problems)."""
     from googleapiclient.http import MediaFileUpload
 
+    tracks = list_tracks(yt, video_id)
     for lang, path in subs.items():
-        body = {"snippet": {"videoId": video_id, "language": lang, "name": ""}}
         media = MediaFileUpload(path, mimetype="application/octet-stream", resumable=False)
-        yt.captions().insert(part="snippet", body=body, media_body=media).execute()
-        log(f"  subtitles {lang}: {path}")
+        same = [t for t in tracks if t[2] != "asr" and base_lang(t[1]) == base_lang(lang)]
+        if same:
+            body = {"id": same[0][0], "snippet": {"videoId": video_id, "language": same[0][1], "name": ""}}
+            yt.captions().update(part="snippet", body=body, media_body=media).execute()
+            log(f"  subtitles {lang}: {path} (replaced our existing {same[0][1]} track)")
+        else:
+            body = {"snippet": {"videoId": video_id, "language": lang, "name": ""}}
+            yt.captions().insert(part="snippet", body=body, media_body=media).execute()
+            log(f"  subtitles {lang}: {path}")
+    report_tracks(video_id, list_tracks(yt, video_id), audio_lang=audio_language(yt, video_id))
+
+
+def audio_language(yt, video_id):
+    """The video's own audio language (defaultAudioLanguage), '' if not set."""
+    items = yt.videos().list(part="snippet", id=video_id).execute().get("items", [])
+    return items[0]["snippet"].get("defaultAudioLanguage", "") if items else ""
+
+
+def report_tracks(video_id, tracks, title="", audio_lang=""):
+    langs = ", ".join(f"{l}{' (auto)' if k == 'asr' else ''}" for _, l, k in tracks) or "none"
+    log(f"{video_id} {title}".rstrip() + f"\n  audio {audio_lang or '?'}, subtitles: {langs}")
+    problems = track_problems(tracks, audio_lang)
+    for p in problems:
+        log(f"  DUPLICATE {p}")
+    return problems
 
 
 def do_locs(yt, video_id, locs, default_lang=None):
@@ -320,6 +383,31 @@ def cmd_captions(args):
     do_captions(service(), args.video_id, subs)
 
 
+def cmd_tracks(args):
+    """Read only: list subtitle tracks and flag duplicate languages, for the given videos or, with no
+    ids, the channel's latest uploads (YouTube adds automatic tracks after our upload, so check again
+    a day later, before the video goes public)."""
+    n = len(args.video_ids) or args.last
+    cost = n * 51 + (0 if args.video_ids else 2)   # captions.list 50 + videos.list 1 per video
+    if args.dry_run:
+        log(f"DRY RUN: would check {n} videos, about {cost} of the 10 000 daily quota units")
+        return
+    log(f"checking {n} videos, about {cost} quota units (shared with uploads and the comment jobs)")
+    yt = service()
+    ids = args.video_ids
+    titles = {}
+    if not ids:
+        ch = yt.channels().list(part="contentDetails", mine=True).execute()["items"][0]
+        up = ch["contentDetails"]["relatedPlaylists"]["uploads"]
+        items = yt.playlistItems().list(part="snippet", playlistId=up, maxResults=args.last).execute()["items"]
+        ids = [i["snippet"]["resourceId"]["videoId"] for i in items]
+        titles = {i["snippet"]["resourceId"]["videoId"]: i["snippet"]["title"] for i in items}
+    bad = 0
+    for v in ids:
+        bad += bool(report_tracks(v, list_tracks(yt, v), titles.get(v, ""), audio_language(yt, v)))
+    log(f"{bad} of {len(ids)} videos have a duplicate language" if bad else f"no duplicate languages in {len(ids)} videos")
+
+
 def cmd_thumb(args):
     check_files([args.image])
     if args.dry_run:
@@ -362,6 +450,12 @@ def main():
     c.add_argument("--sub", action="append", required=True)
     c.set_defaults(fn=cmd_captions)
 
+    k = sub.add_parser("tracks", help="read only: subtitle languages, flags YouTube's automatic duplicates")
+    k.add_argument("video_ids", nargs="*", help="video ids; none = the latest uploads")
+    k.add_argument("--last", type=int, default=10,
+                   help="how many latest uploads to check (max 50); each costs about 51 quota units")
+    k.set_defaults(fn=cmd_tracks)
+
     t = sub.add_parser("thumb", help="set thumbnail")
     t.add_argument("video_id")
     t.add_argument("image")
@@ -373,7 +467,7 @@ def main():
     l.add_argument("--lang", help="film language, if not set on the video yet")
     l.set_defaults(fn=cmd_loc)
 
-    for sp in (a, u, c, t, l):
+    for sp in (a, u, c, k, t, l):
         sp.add_argument("--dry-run", action="store_true")
         sp.add_argument("--channel", default="main",
                         help="which saved channel login to use (main, pl, ua ...)")

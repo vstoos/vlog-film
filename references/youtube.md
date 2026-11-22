@@ -89,7 +89,17 @@ python yt_upload.py upload <footage>/<Name>_HLG.mp4 --title "..." --desc <footag
 python yt_upload.py captions <VIDEO_ID> --sub pl=<Name>.pl.srt     # add later / another language
 python yt_upload.py thumb <VIDEO_ID> thumb2.jpg
 python yt_upload.py loc <VIDEO_ID> --loc en="Title|desc.en.txt"
+python yt_upload.py tracks [<VIDEO_ID> ...] [--last 10]               # read only: duplicate subtitle languages
 ```
+
+YouTube adds its own automatic subtitles minutes after an upload, also for each dubbed audio track
+(GLC Short, 14.11.2026: a Polish auto track next to ours; Yaris S2: en auto next to our en-US). Studio then
+shows that language twice. The API cannot remove them (yt_upload never deletes), so a day after uploading,
+before the video goes public, run `tracks` on the new videos and tell the user which auto tracks to
+unpublish in Studio -> Subtitles. The auto track in the video's own audio language is normal; `tracks`
+does not flag it. `captions` now replaces our existing track in a language instead of adding a second one.
+Quota: `tracks` costs about 51 units per video, shared with uploads and the comment jobs; run `--dry-run`
+first, which prints the cost (a real run of 30 videos twice used up a whole day's quota on 14.11.2026).
 
 Description files: a `--desc`/`--loc` value ending in .txt/.md is always read as a file and the script
 stops if it is missing (12.11.2026 a git-bash `/c/...` path was not found and went up as the EN
