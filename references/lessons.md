@@ -132,6 +132,15 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   check them against nvidia-smi first; `vfconfig.cuda_index()` picks the card with the most memory.
 - **Check the cards are free first.** Other sessions run detection and transcription on them; Higgs
   takes about 85% of the 3090, WhisperX a few GB. An occupied card means OOM or a crawl for both jobs.
+  The user also runs local LLM servers (llama-server from D:\llm, about 23 GB of the 3090, 22.11.2026).
+  On Windows a model loaded onto a full card does not fail: the driver spills it into system RAM, so
+  WhisperX and the LLM both slow down badly or hang, with no error. Before every GPU job (WhisperX,
+  Higgs, plate detection), even a 30-second transcription: `nvidia-smi --query-gpu=index,name,memory.used,
+  memory.total,utilization.gpu --format=csv` and `nvidia-smi --query-compute-apps=pid,process_name
+  --format=csv`. On Windows torch's `mem_get_info()` shows such a card as empty, so trust nvidia-smi.
+  `vfconfig.cuda_index()` now picks the card with the most free memory (nvidia-smi, matched by UUID) and stops when none
+  has `gpu_min_free_gb` (config, default 4) free; do not override that with VF_GPU onto a busy card.
+  If both cards are busy, wait or ask the user before stopping their job; never stop it yourself.
 - **Hardware encoding.** NVENC is a separate block on the card and stays free while CUDA is busy.
   hevc_nvenc keeps Main 10 and the HLG tags (melt: `vcodec=hevc_nvenc pix_fmt=p010le vprofile=main10
   preset=p6 rc=vbr cq=16 b=0`; ffmpeg: `vfconfig.hevc_args()`). Measured on 20 s of the Mercedes film:

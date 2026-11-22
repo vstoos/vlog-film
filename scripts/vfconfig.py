@@ -116,16 +116,54 @@ def ff_font(path):
     return path.replace("\\", "/").replace(":", "\\:")
 
 
-def cuda_index():
-    """The CUDA device to use: VF_GPU / config "gpu", else the one with the most memory."""
-    g = get("gpu")
-    if g not in (None, ""):
-        return int(g)
+def cuda_index(min_free_gb=None):
+    """The CUDA device to use: VF_GPU / config "gpu", else the one with the most FREE memory.
+
+    Another job (a local LLM server, Higgs, another session's WhisperX) may already fill a card. Loading a
+    model next to it does not fail on Windows: the driver spills into system RAM and both jobs crawl or
+    hang (22.11.2026: WhisperX on a 3090 held by an LLM server). So pick by free memory, and stop when no
+    card has "gpu_min_free_gb" (default 4) free, instead of loading anyway. A forced VF_GPU / "gpu" card
+    is also checked and only warned about."""
+    import sys
     import torch
     n = torch.cuda.device_count()
     if n == 0:
         raise SystemExit("No CUDA GPU found: WhisperX needs an NVIDIA GPU (or edit the scripts for CPU).")
-    return max(range(n), key=lambda i: torch.cuda.get_device_properties(i).total_memory)
+    need = float(min_free_gb if min_free_gb is not None else (get("gpu_min_free_gb") or 4))
+    # Free memory from nvidia-smi, matched by UUID: on Windows (WDDM) torch.cuda.mem_get_info() reports
+    # almost the whole card free while another process holds 23 GB of it (checked 22.11.2026), and
+    # nvidia-smi numbers the cards differently from CUDA.
+    import subprocess
+    smi = {}
+    try:
+        out = subprocess.run(["nvidia-smi", "--query-gpu=uuid,memory.used,memory.total", "--format=csv,noheader,nounits"],
+                             capture_output=True, text=True, timeout=20).stdout
+        for line in out.strip().splitlines():
+            u, used, total = [x.strip() for x in line.split(",")]
+            smi[u.lower().replace("gpu-", "")] = (float(total) - float(used)) / 1024
+    except Exception as e:
+        print("nvidia-smi failed (%s); falling back to torch's numbers" % e, file=sys.stderr)
+    free = {}
+    for i in range(n):
+        p = torch.cuda.get_device_properties(i)
+        u = str(getattr(p, "uuid", "")).lower().replace("gpu-", "")
+        if u in smi:
+            free[i] = smi[u]
+        else:
+            free[i] = torch.cuda.mem_get_info(i)[0] / 2**30
+        print("CUDA %d %s: %.1f of %.1f GB free" % (i, p.name, free[i], p.total_memory / 2**30), file=sys.stderr)
+    g = get("gpu")
+    if g not in (None, ""):
+        g = int(g)
+        if free.get(g, 0) < need:
+            print("WARNING: forced CUDA %d has only %.1f GB free (want %.1f): another job is on it"
+                  % (g, free.get(g, 0), need), file=sys.stderr)
+        return g
+    best = max(free, key=free.get)
+    if free[best] < need:
+        raise SystemExit("No GPU has %.1f GB free (best: CUDA %d, %.1f GB). Another job holds the cards: "
+                         "check nvidia-smi, wait or ask the user; set VF_GPU to force one." % (need, best, free[best]))
+    return best
 
 
 def torch_dlls():
