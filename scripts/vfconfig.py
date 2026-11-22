@@ -122,14 +122,14 @@ def cuda_index(min_free_gb=None):
     Another job (a local LLM server, Higgs, another session's WhisperX) may already fill a card. Loading a
     model next to it does not fail on Windows: the driver spills into system RAM and both jobs crawl or
     hang (22.11.2026: WhisperX on a 3090 held by an LLM server). So pick by free memory, and stop when no
-    card has "gpu_min_free_gb" (default 4) free, instead of loading anyway. A forced VF_GPU / "gpu" card
+    card has "gpu_min_free_gb" (default 6; WhisperX ran out of memory on a 3060 with 5 GB free, 22.11.2026) free, instead of loading anyway. A forced VF_GPU / "gpu" card
     is also checked and only warned about."""
     import sys
     import torch
     n = torch.cuda.device_count()
     if n == 0:
         raise SystemExit("No CUDA GPU found: WhisperX needs an NVIDIA GPU (or edit the scripts for CPU).")
-    need = float(min_free_gb if min_free_gb is not None else (get("gpu_min_free_gb") or 4))
+    need = float(min_free_gb if min_free_gb is not None else (get("gpu_min_free_gb") or 6))
     # Free memory from nvidia-smi, matched by UUID: on Windows (WDDM) torch.cuda.mem_get_info() reports
     # almost the whole card free while another process holds 23 GB of it (checked 22.11.2026), and
     # nvidia-smi numbers the cards differently from CUDA.

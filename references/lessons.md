@@ -139,7 +139,7 @@ Each of these cost a render or a round of user notes. They are why the pipeline 
   memory.total,utilization.gpu --format=csv` and `nvidia-smi --query-compute-apps=pid,process_name
   --format=csv`. On Windows torch's `mem_get_info()` shows such a card as empty, so trust nvidia-smi.
   `vfconfig.cuda_index()` now picks the card with the most free memory (nvidia-smi, matched by UUID) and stops when none
-  has `gpu_min_free_gb` (config, default 4) free; do not override that with VF_GPU onto a busy card.
+  has `gpu_min_free_gb` (config, default 6: WhisperX large ran out of memory with 5 GB free) free; do not override that with VF_GPU onto a busy card.
   If both cards are busy, wait or ask the user before stopping their job; never stop it yourself.
 - **Hardware encoding.** NVENC is a separate block on the card and stays free while CUDA is busy.
   hevc_nvenc keeps Main 10 and the HLG tags (melt: `vcodec=hevc_nvenc pix_fmt=p010le vprofile=main10
